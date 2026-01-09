@@ -51,3 +51,6 @@ htmlcov/
 
 # Fusion 360 specific
 *.lnk
+
+# Distribution packages
+TubeBendSheet.zip

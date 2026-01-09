@@ -1,7 +1,7 @@
 # TubeBendSheet Development Tasks
 # Usage: make <target>
 
-.PHONY: check lint typecheck test validate
+.PHONY: check lint typecheck test validate package clean-package
 
 # Check Python syntax
 check:
@@ -25,3 +25,26 @@ test:
 validate: check lint test
 	@echo ""
 	@echo "All validation passed!"
+
+# Clean previous package
+clean-package:
+	@rm -f TubeBendSheet.zip
+
+# Create distribution zip for App Store submission
+package: clean-package
+	@echo "Creating TubeBendSheet.zip..."
+	@zip -r TubeBendSheet.zip . \
+		-x ".*" \
+		-x "*/.*" \
+		-x "__pycache__/*" \
+		-x "*/__pycache__/*" \
+		-x "tests/*" \
+		-x "typings/*" \
+		-x "*.pyc" \
+		-x "Makefile" \
+		-x "pyproject.toml" \
+		-x "pyrightconfig.json" \
+		-x "CLAUDE.md" \
+		-x "TubeBendSheet.zip"
+	@echo "Created TubeBendSheet.zip"
+	@unzip -l TubeBendSheet.zip | tail -1

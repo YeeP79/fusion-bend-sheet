@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="128" height="128" viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg">
+  <title>TubeBendSheet Icon</title>
+
+  <!-- Document/Paper background -->
+  <g transform="translate(20, 16)">
+    <!-- Paper shadow -->
+    <path d="M8 8 L88 8 L88 104 L8 104 Z" fill="#c0c0c0"/>
+    <!-- Paper body -->
+    <path d="M4 4 L72 4 L84 16 L84 100 L4 100 Z" fill="#ffffff" stroke="#808080" stroke-width="2"/>
+    <!-- Folded corner -->
+    <path d="M72 4 L72 16 L84 16 Z" fill="#e0e0e0" stroke="#808080" stroke-width="1"/>
+    <!-- Lines on paper suggesting data -->
+    <line x1="12" y1="24" x2="52" y2="24" stroke="#d0d0d0" stroke-width="3"/>
+    <line x1="12" y1="36" x2="68" y2="36" stroke="#d0d0d0" stroke-width="3"/>
+    <line x1="12" y1="48" x2="60" y2="48" stroke="#d0d0d0" stroke-width="3"/>
+    <line x1="12" y1="60" x2="64" y2="60" stroke="#d0d0d0" stroke-width="3"/>
+    <line x1="12" y1="72" x2="56" y2="72" stroke="#d0d0d0" stroke-width="3"/>
+    <line x1="12" y1="84" x2="48" y2="84" stroke="#d0d0d0" stroke-width="3"/>
+  </g>
+
+  <!-- Tube with two bends -->
+  <g>
+    <!-- Tube outer (creates 3D effect) -->
+    <path d="M16 112
+             L16 80
+             Q16 64 32 64
+             L64 64
+             Q80 64 80 48
+             L80 24"
+          fill="none"
+          stroke="#b87333"
+          stroke-width="16"
+          stroke-linecap="round"
+          stroke-linejoin="round"/>
+    <!-- Tube highlight (inner shine) -->
+    <path d="M16 112
+             L16 80
+             Q16 64 32 64
+             L64 64
+             Q80 64 80 48
+             L80 24"
+          fill="none"
+          stroke="#d4956a"
+          stroke-width="8"
+          stroke-linecap="round"
+          stroke-linejoin="round"/>
+    <!-- Tube center highlight -->
+    <path d="M16 112
+             L16 80
+             Q16 64 32 64
+             L64 64
+             Q80 64 80 48
+             L80 24"
+          fill="none"
+          stroke="#e8b896"
+          stroke-width="3"
+          stroke-linecap="round"
+          stroke-linejoin="round"/>
+  </g>
+</svg>
