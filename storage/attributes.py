@@ -10,7 +10,7 @@ if TYPE_CHECKING:
     import adsk.fusion
 
 # Attribute group name for all our data
-ATTR_GROUP = 'TubeBendCalculator'
+ATTR_GROUP = 'TubeBendSheet'
 
 
 @dataclass(slots=True)

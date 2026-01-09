@@ -1,4 +1,4 @@
-# FusionBendSheet
+# TubeBendSheet
 
 An Autodesk Fusion add-in for calculating multi-plane tube bend rotations and generating printable bend sheets from sketch geometry.
 
@@ -6,7 +6,7 @@ An Autodesk Fusion add-in for calculating multi-plane tube bend rotations and ge
 
 - [Overview](#overview)
 - [Installation](#installation)
-- [AI Quick Start](#ai-quick-start-fusionbendsheet)
+- [AI Quick Start](#ai-quick-start-tubebendsheet)
 - [Usage](#usage)
 - [Bend Sheet Output](#bend-sheet-output)
 - [How Rotation is Calculated](#how-rotation-is-calculated)
@@ -42,7 +42,7 @@ This add-in analyzes a sketch path of connected lines and arcs in Autodesk Fusio
 1. Download or clone this repository
 2. In Autodesk Fusion, go to **Tools > Add-Ins**
 3. Click the **+** button next to "My Add-Ins"
-4. Navigate to the `FusionBendSheet` folder and select it
+4. Navigate to the `TubeBendSheet` folder and select it
 5. Check **Run on Startup** if you want the add-in to load automatically
 
 ### Verification
@@ -51,7 +51,7 @@ After installation, you should see a "Tube Bending" panel in the Tools tab with:
 - **Create Bend Sheet** - Generate bend calculations from sketch geometry
 - **Manage Benders** - Configure your bender and die profiles
 
-## AI Quick Start: FusionBendSheet
+## AI Quick Start: TubeBendSheet
 
 ### When to Use This Add-in
 
@@ -206,9 +206,9 @@ The rotation before Bend 2 would be **60°**—you rotate the tube 60° in the b
 ## Project Structure
 
 ```
-FusionBendSheet/
-├── FusionBendSheet.py         # Entry point (run/stop)
-├── FusionBendSheet.manifest   # Add-in metadata
+TubeBendSheet/
+├── TubeBendSheet.py           # Entry point (run/stop)
+├── TubeBendSheet.manifest     # Add-in metadata
 ├── config.py                  # Global configuration
 ├── Makefile                   # Development tasks
 ├── commands/                  # UI command handlers

@@ -1,4 +1,4 @@
-"""Shared type definitions for TubeBendCalculator.
+"""Shared type definitions for TubeBendSheet.
 
 This module provides common type aliases and Literal types used
 throughout the codebase to ensure type safety and consistency.

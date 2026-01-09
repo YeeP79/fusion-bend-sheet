@@ -1,4 +1,4 @@
-# TubeBendCalculator - Comprehensive Robustness Review
+# TubeBendSheet - Comprehensive Robustness Review
 
 **Review Date:** 2026-01-03
 **Review Type:** FULL REPOSITORY REVIEW
@@ -54,7 +54,7 @@
 
 ### 1. Use of `Any` Type Without Justification
 
-**Location:** `/Users/ryanhartman/Projects/personal/fusion/add-ins/TubeBendCalculator/storage/attributes.py`, line 7
+**Location:** `/Users/ryanhartman/Projects/personal/fusion/add-ins/TubeBendSheet/storage/attributes.py`, line 7
 
 ```python
 from typing import TYPE_CHECKING, Any
@@ -116,7 +116,7 @@ def _get_attribute_target(
 
 ### 2. Missing Exception Handling Without futil.handle_error()
 
-**Location:** `/Users/ryanhartman/Projects/personal/fusion/add-ins/TubeBendCalculator/storage/attributes.py`, lines 89, 114, 136
+**Location:** `/Users/ryanhartman/Projects/personal/fusion/add-ins/TubeBendSheet/storage/attributes.py`, lines 89, 114, 136
 
 ```python
 # Line 89
@@ -168,7 +168,7 @@ def save_settings(entity: '...', settings: TubeSettings) -> bool:
 
 ### 3. Missing Input Validation on Numeric Inputs
 
-**Location:** `/Users/ryanhartman/Projects/personal/fusion/add-ins/TubeBendCalculator/commands/manageBenders/entry.py`, lines 214-218, 307-310, etc.
+**Location:** `/Users/ryanhartman/Projects/personal/fusion/add-ins/TubeBendSheet/commands/manageBenders/entry.py`, lines 214-218, 307-310, etc.
 
 ```python
 # Line 214-218
@@ -204,7 +204,7 @@ Apply the same pattern to:
 
 ### 4. Potential Division by Zero in CLR Tolerance Calculation
 
-**Location:** `/Users/ryanhartman/Projects/personal/fusion/add-ins/TubeBendCalculator/core/calculations.py`, lines 58-61
+**Location:** `/Users/ryanhartman/Projects/personal/fusion/add-ins/TubeBendSheet/core/calculations.py`, lines 58-61
 
 ```python
 clr = clr_values[0]
@@ -234,7 +234,7 @@ has_mismatch = any(abs(c - clr) > tolerance for c in clr_values)
 
 ### 5. Missing Validation for Empty Straights List
 
-**Location:** `/Users/ryanhartman/Projects/personal/fusion/add-ins/TubeBendCalculator/commands/createBendSheet/entry.py`, line 324
+**Location:** `/Users/ryanhartman/Projects/personal/fusion/add-ins/TubeBendSheet/commands/createBendSheet/entry.py`, line 324
 
 ```python
 first_feed: float = straights[0].length - params.die_offset
@@ -257,8 +257,8 @@ first_feed: float = straights[0].length - params.die_offset
 ### 6. Command Entry Points Violate SRP
 
 **Location:**
-- `/Users/ryanhartman/Projects/personal/fusion/add-ins/TubeBendCalculator/commands/createBendSheet/entry.py` (424 lines)
-- `/Users/ryanhartman/Projects/personal/fusion/add-ins/TubeBendCalculator/commands/manageBenders/entry.py` (450 lines)
+- `/Users/ryanhartman/Projects/personal/fusion/add-ins/TubeBendSheet/commands/createBendSheet/entry.py` (424 lines)
+- `/Users/ryanhartman/Projects/personal/fusion/add-ins/TubeBendSheet/commands/manageBenders/entry.py` (450 lines)
 
 **Problem:** These entry points handle too many concerns:
 1. Command registration/deregistration
@@ -356,7 +356,7 @@ Then simplify `entry.py` to only handle UI concerns.
 
 ### 7. Missing Type Hints on Handler List
 
-**Location:** `/Users/ryanhartman/Projects/personal/fusion/add-ins/TubeBendCalculator/commands/createBendSheet/entry.py`, line 51
+**Location:** `/Users/ryanhartman/Projects/personal/fusion/add-ins/TubeBendSheet/commands/createBendSheet/entry.py`, line 51
 
 ```python
 local_handlers: list = []
@@ -380,7 +380,7 @@ This applies to both command entry points.
 
 ### 8. Potential NaN in Formatting Negative Values
 
-**Location:** `/Users/ryanhartman/Projects/personal/fusion/add-ins/TubeBendCalculator/core/formatting.py`, line 30
+**Location:** `/Users/ryanhartman/Projects/personal/fusion/add-ins/TubeBendSheet/core/formatting.py`, line 30
 
 ```python
 total_parts: int = round(value * denominator)
@@ -424,8 +424,8 @@ def decimal_to_fraction(value: float, denominator: int) -> str:
 ### 9. Duplicate Vector3D/Point3D Type Definitions
 
 **Locations:**
-- `/Users/ryanhartman/Projects/personal/fusion/add-ins/TubeBendCalculator/core/geometry.py`, lines 8-9
-- `/Users/ryanhartman/Projects/personal/fusion/add-ins/TubeBendCalculator/models/bend_data.py`, lines 11-12
+- `/Users/ryanhartman/Projects/personal/fusion/add-ins/TubeBendSheet/core/geometry.py`, lines 8-9
+- `/Users/ryanhartman/Projects/personal/fusion/add-ins/TubeBendSheet/models/bend_data.py`, lines 11-12
 
 ```python
 # In geometry.py
@@ -441,7 +441,7 @@ Point3D = tuple[float, float, float]
 
 ```python
 # In models/types.py (new file)
-"""Shared type definitions for TubeBendCalculator."""
+"""Shared type definitions for TubeBendSheet."""
 
 Vector3D = tuple[float, float, float]
 Point3D = tuple[float, float, float]
@@ -454,7 +454,7 @@ from ..models.types import Vector3D, Point3D
 
 ### 10. Magic String for Element Types
 
-**Location:** `/Users/ryanhartman/Projects/personal/fusion/add-ins/TubeBendCalculator/core/geometry_extraction.py`, line 62
+**Location:** `/Users/ryanhartman/Projects/personal/fusion/add-ins/TubeBendSheet/core/geometry_extraction.py`, line 62
 
 ```python
 element_type: str  # 'line' or 'arc'
@@ -479,7 +479,7 @@ class PathElement:
 
 ### 11. Segment Type Uses String Instead of Literal
 
-**Location:** `/Users/ryanhartman/Projects/personal/fusion/add-ins/TubeBendCalculator/models/bend_data.py`, line 42
+**Location:** `/Users/ryanhartman/Projects/personal/fusion/add-ins/TubeBendSheet/models/bend_data.py`, line 42
 
 ```python
 segment_type: str  # 'straight' or 'bend'
@@ -502,7 +502,7 @@ class PathSegment:
 
 ### 12. Missing Test Coverage for Formatting Module
 
-**Location:** `/Users/ryanhartman/Projects/personal/fusion/add-ins/TubeBendCalculator/core/formatting.py`
+**Location:** `/Users/ryanhartman/Projects/personal/fusion/add-ins/TubeBendSheet/core/formatting.py`
 
 **Problem:** No unit tests exist for critical formatting functions:
 - `decimal_to_fraction()` - handles user-visible measurements
@@ -545,7 +545,7 @@ class TestDecimalToFraction:
 
 ### 13. Missing Test Coverage for Path Ordering
 
-**Location:** `/Users/ryanhartman/Projects/personal/fusion/add-ins/TubeBendCalculator/core/path_ordering.py`
+**Location:** `/Users/ryanhartman/Projects/personal/fusion/add-ins/TubeBendSheet/core/path_ordering.py`
 
 **Problem:** No tests for path ordering logic which is critical for correct bend sequence.
 
@@ -589,7 +589,7 @@ class TestBuildOrderedPath:
 
 ### 14. Unit Conversion Not Validated for Unknown Units
 
-**Location:** `/Users/ryanhartman/Projects/personal/fusion/add-ins/TubeBendCalculator/models/units.py`, lines 105-111
+**Location:** `/Users/ryanhartman/Projects/personal/fusion/add-ins/TubeBendSheet/models/units.py`, lines 105-111
 
 ```python
 config = unit_configs.get(default_units)
@@ -603,7 +603,7 @@ if config is None:
 
 **Observation:** This is actually good error handling. However, callers don't always catch this.
 
-**Location of concern:** `/Users/ryanhartman/Projects/personal/fusion/add-ins/TubeBendCalculator/commands/createBendSheet/entry.py`, line 135
+**Location of concern:** `/Users/ryanhartman/Projects/personal/fusion/add-ins/TubeBendSheet/commands/createBendSheet/entry.py`, line 135
 
 ```python
 units = UnitConfig.from_design(design)
@@ -623,7 +623,7 @@ except ValueError as e:
 
 ### 15. ProfileManager Loads on Every Property Access
 
-**Location:** `/Users/ryanhartman/Projects/personal/fusion/add-ins/TubeBendCalculator/storage/profiles.py`, lines 52-56
+**Location:** `/Users/ryanhartman/Projects/personal/fusion/add-ins/TubeBendSheet/storage/profiles.py`, lines 52-56
 
 ```python
 @property
@@ -649,7 +649,7 @@ def reload(self) -> None:
 
 ### 16. HTML Bridge Doesn't Validate JSON Structure
 
-**Location:** `/Users/ryanhartman/Projects/personal/fusion/add-ins/TubeBendCalculator/commands/manageBenders/html_bridge.py`, lines 87-97
+**Location:** `/Users/ryanhartman/Projects/personal/fusion/add-ins/TubeBendSheet/commands/manageBenders/html_bridge.py`, lines 87-97
 
 ```python
 if args.data:
@@ -704,7 +704,7 @@ class BendData:
 
 ### 19. Debug Flag Should Default to False
 
-**Location:** `/Users/ryanhartman/Projects/personal/fusion/add-ins/TubeBendCalculator/config.py`, line 11
+**Location:** `/Users/ryanhartman/Projects/personal/fusion/add-ins/TubeBendSheet/config.py`, line 11
 
 ```python
 DEBUG = True
@@ -721,7 +721,7 @@ DEBUG = False
 
 ### 20. Consider Adding __all__ to Prevent Import Pollution
 
-**Location:** `/Users/ryanhartman/Projects/personal/fusion/add-ins/TubeBendCalculator/lib/fusionAddInUtils/__init__.py`
+**Location:** `/Users/ryanhartman/Projects/personal/fusion/add-ins/TubeBendSheet/lib/fusionAddInUtils/__init__.py`
 
 ```python
 from .general_utils import *

@@ -1,4 +1,4 @@
-# TubeBendCalculator Development Tasks
+# TubeBendSheet Development Tasks
 # Usage: make <target>
 
 .PHONY: check lint typecheck test validate

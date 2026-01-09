@@ -1,6 +1,6 @@
 # Claude Code Development Standards
 
-**Project:** TubeBendCalculator - Autodesk Fusion Add-in for Tube Bend Rotation Calculation
+**Project:** TubeBendSheet - Autodesk Fusion Add-in for Tube Bend Rotation Calculation
 **Last Updated:** 2026-01-09
 **Applies to:** All AI assistants, developers, and code reviewers
 
@@ -391,9 +391,9 @@ def test_format_length_imperial():
 ## Directory Structure
 
 ```
-TubeBendCalculator/
-├── TubeBendCalculator.py          # Main entry point (run/stop)
-├── TubeBendCalculator.manifest    # Add-in metadata
+TubeBendSheet/
+├── TubeBendSheet.py               # Main entry point (run/stop)
+├── TubeBendSheet.manifest         # Add-in metadata
 ├── config.py                      # Global configuration
 ├── Makefile                       # Development tasks
 ├── pyproject.toml                 # Python project config (ruff, pyright, pytest)

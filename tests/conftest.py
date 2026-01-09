@@ -1,20 +1,20 @@
 """
-Pytest configuration for TubeBendCalculator tests.
+Pytest configuration for TubeBendSheet tests.
 
 This conftest.py sets up the Python path and module aliases so that tests can
 import project modules using simple names (e.g., `from core.x import y`) while
 the production code uses relative imports for Fusion 360 compatibility.
 
 How it works:
-1. Adds the parent of TubeBendCalculator to sys.path
-2. Imports TubeBendCalculator as a package (triggering __init__.py)
-3. Creates module aliases so `import core` resolves to `TubeBendCalculator.core`
+1. Adds the parent of TubeBendSheet to sys.path
+2. Imports TubeBendSheet as a package (triggering __init__.py)
+3. Creates module aliases so `import core` resolves to `TubeBendSheet.core`
 """
 import sys
 from pathlib import Path
 
-# Add the parent directory of TubeBendCalculator to sys.path
-# This allows `import TubeBendCalculator` to work
+# Add the parent directory of TubeBendSheet to sys.path
+# This allows `import TubeBendSheet` to work
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root.parent))
 
@@ -24,7 +24,7 @@ sys.path.insert(0, str(project_root))
 # Import package submodules and create aliases
 # This allows tests to use simple imports like `from core.x import y`
 # while the production code uses relative imports for Fusion 360 compatibility
-from TubeBendCalculator import core, models, storage
+from TubeBendSheet import core, models, storage
 
 sys.modules['core'] = core
 sys.modules['models'] = models

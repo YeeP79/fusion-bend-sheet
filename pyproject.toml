@@ -1,5 +1,5 @@
 [project]
-name = "TubeBendCalculator"
+name = "TubeBendSheet"
 version = "1.0.0"
 description = "Autodesk Fusion 360 add-in for tube bend calculations"
 requires-python = ">=3.10"
