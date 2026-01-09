@@ -1,0 +1,13 @@
+{
+	"autodeskProduct": "Fusion",
+	"type": "addin",
+	"author": "",
+	"description": {
+		"": "Calculate multi-plane tube bend rotations and generate printable bend sheets from sketch geometry."
+	},
+	"version": "1.0.0",
+	"runOnStartup": false,
+	"supportedOS": "windows|mac",
+	"editEnabled": true,
+	"iconFilename": "AddInIcon.svg"
+}

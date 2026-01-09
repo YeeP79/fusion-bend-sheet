@@ -1,0 +1,83 @@
+"""Bend calculation data models."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+
+from .types import Vector3D, Point3D, SegmentType
+from .units import UnitConfig
+
+
+@dataclass(slots=True)
+class StraightSection:
+    """Represents a straight section of tube between bends."""
+    number: int
+    length: float  # In display units
+    start: Point3D
+    end: Point3D
+    vector: Vector3D  # In internal units (cm) for calculations
+
+
+@dataclass(slots=True)
+class BendData:
+    """Represents a bend in the tube path."""
+
+    number: int
+    angle: float  # Degrees
+    rotation: float | None  # Degrees, None for first bend
+    arc_length: float = 0.0  # In display units
+
+    def __repr__(self) -> str:
+        rot = f", rot={self.rotation:.1f}" if self.rotation is not None else ""
+        return f"BendData(#{self.number}, angle={self.angle:.1f}{rot})"
+
+
+@dataclass(slots=True)
+class PathSegment:
+    """Represents a segment in the cumulative path table."""
+    segment_type: SegmentType
+    name: str
+    length: float
+    starts_at: float
+    ends_at: float
+    bend_angle: float | None
+    rotation: float | None
+
+
+@dataclass(slots=True)
+class MarkPosition:
+    """Represents a mark position for the bender setup."""
+    bend_num: int
+    mark_position: float
+    bend_angle: float
+    rotation: float | None
+
+
+@dataclass(slots=True)
+class BendSheetData:
+    """All data needed to generate a bend sheet."""
+    component_name: str
+    tube_od: float
+    clr: float
+    die_offset: float
+    precision: int
+    min_grip: float
+    travel_direction: str
+    starts_with_arc: bool
+    ends_with_arc: bool
+    clr_mismatch: bool
+    clr_values: list[float]
+    continuity_errors: list[str]
+    straights: list[StraightSection]
+    bends: list[BendData]
+    segments: list[PathSegment]
+    mark_positions: list[MarkPosition]
+    extra_material: float
+    total_centerline: float
+    total_cut_length: float
+    units: UnitConfig
+    bender_name: str = ""
+    die_name: str = ""
+    grip_violations: list[int] = field(default_factory=list)  # Straight section numbers too short for min_grip
+    min_tail: float = 0.0  # Minimum length required after last bend
+    tail_violation: bool = False  # True if last straight is shorter than min_tail

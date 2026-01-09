@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Manage Benders</title>
+    <style>
+        :root {
+            --bg-primary: #3c3c3c;
+            --bg-secondary: #4a4a4a;
+            --bg-hover: #555555;
+            --bg-selected: #0078d4;
+            --text-primary: #e0e0e0;
+            --text-secondary: #a0a0a0;
+            --accent-blue: #0696d7;
+            --border-color: #5a5a5a;
+            --danger-red: #d32f2f;
+            --success-green: #4caf50;
+        }
+
+        * {
+            font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            font-size: 12px;
+            padding: 8px;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* Tree container */
+        .tree {
+            user-select: none;
+        }
+
+        /* Bender node */
+        .bender-node {
+            margin-bottom: 2px;
+        }
+
+        .bender-header {
+            display: flex;
+            align-items: center;
+            padding: 6px 8px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 3px;
+            cursor: pointer;
+            transition: background 0.1s;
+            flex-wrap: wrap;
+            gap: 4px;
+        }
+
+        .bender-header:hover {
+            background: var(--bg-hover);
+        }
+
+        .expand-icon {
+            width: 16px;
+            font-size: 10px;
+            color: var(--text-secondary);
+            transition: transform 0.15s;
+            flex-shrink: 0;
+        }
+
+        .bender-header.expanded .expand-icon {
+            transform: rotate(90deg);
+        }
+
+        .bender-name {
+            flex: 1;
+            font-weight: 600;
+            margin-left: 4px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .bender-info {
+            color: var(--text-secondary);
+            font-size: 11px;
+            margin-right: 4px;
+            flex-shrink: 1;
+            min-width: 0;
+        }
+
+        /* Action buttons */
+        .actions {
+            display: flex;
+            gap: 4px;
+            flex-shrink: 0;
+        }
+
+        .action-btn {
+            padding: 2px 6px;
+            font-size: 10px;
+            border: 1px solid var(--border-color);
+            border-radius: 2px;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            cursor: pointer;
+            transition: all 0.1s;
+            white-space: nowrap;
+        }
+
+        .action-btn:hover {
+            background: var(--bg-hover);
+            border-color: var(--accent-blue);
+        }
+
+        .action-btn.add {
+            color: var(--success-green);
+            border-color: var(--success-green);
+        }
+
+        .action-btn.add:hover {
+            background: rgba(76, 175, 80, 0.2);
+        }
+
+        .action-btn.delete {
+            color: var(--danger-red);
+            border-color: var(--danger-red);
+        }
+
+        .action-btn.delete:hover {
+            background: rgba(211, 47, 47, 0.2);
+        }
+
+        /* Die list */
+        .die-list {
+            margin-left: 20px;
+            padding: 4px 0 4px 8px;
+            border-left: 1px solid var(--border-color);
+            display: none;
+        }
+
+        .bender-node.expanded .die-list {
+            display: block;
+        }
+
+        .die-item {
+            display: flex;
+            align-items: center;
+            padding: 4px 8px;
+            margin-bottom: 2px;
+            background: var(--bg-primary);
+            border: 1px solid var(--border-color);
+            border-radius: 2px;
+            transition: background 0.1s;
+        }
+
+        .die-item:hover {
+            background: var(--bg-hover);
+        }
+
+        .die-name {
+            flex: 1;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .die-info {
+            color: var(--text-secondary);
+            font-size: 11px;
+            margin-right: 8px;
+            flex-shrink: 0;
+        }
+
+        .add-die-row {
+            padding: 4px 8px;
+            margin-top: 2px;
+        }
+
+        .add-die-btn {
+            padding: 3px 10px;
+            font-size: 11px;
+            border: 1px dashed var(--border-color);
+            border-radius: 2px;
+            background: transparent;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.1s;
+        }
+
+        .add-die-btn:hover {
+            border-color: var(--accent-blue);
+            color: var(--accent-blue);
+            background: rgba(6, 150, 215, 0.1);
+        }
+
+        /* Empty state */
+        .empty-state {
+            text-align: center;
+            color: var(--text-secondary);
+            padding: 32px 16px;
+            font-size: 12px;
+        }
+
+        .empty-dies {
+            color: var(--text-secondary);
+            font-size: 11px;
+            font-style: italic;
+            padding: 8px;
+        }
+
+        /* Add bender section */
+        .add-bender-container {
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid var(--border-color);
+        }
+
+        .add-bender-btn {
+            width: 100%;
+            padding: 8px 16px;
+            background: var(--accent-blue);
+            color: white;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 500;
+            transition: background 0.1s;
+        }
+
+        .add-bender-btn:hover {
+            background: #0580b8;
+        }
+    </style>
+</head>
+<body>
+    <div class="tree" id="benderTree">
+        <div class="empty-state">Loading...</div>
+    </div>
+
+    <div class="add-bender-container">
+        <button class="add-bender-btn" onclick="addBender()">+ Add Bender</button>
+        <button class="action-btn" onclick="refreshBenders()" style="margin-top: 8px; width: 100%;">Refresh</button>
+    </div>
+
+    <script>
+        // State
+        let benders = [];
+        let expandedBenders = new Set();
+
+        // Fusion communication handler - receives messages from Python
+        window.fusionJavaScriptHandler = {
+            handle: function(action, data) {
+                try {
+                    switch (action) {
+                        case 'loadBenders':
+                            benders = JSON.parse(data);
+                            renderTree();
+                            return 'OK';
+
+                        case 'updateBender':
+                            const updated = JSON.parse(data);
+                            updateBenderInList(updated);
+                            renderTree();
+                            return 'OK';
+
+                        case 'addBenderToList':
+                            const newBender = JSON.parse(data);
+                            benders.push(newBender);
+                            expandedBenders.add(newBender.id);
+                            renderTree();
+                            return 'OK';
+
+                        case 'removeBender':
+                            const benderId = data;
+                            benders = benders.filter(b => b.id !== benderId);
+                            expandedBenders.delete(benderId);
+                            renderTree();
+                            return 'OK';
+
+                        case 'removeDie':
+                            const removeData = JSON.parse(data);
+                            removeDieFromBender(removeData.bender_id, removeData.die_id);
+                            renderTree();
+                            return 'OK';
+
+                        default:
+                            return 'UNKNOWN_ACTION: ' + action;
+                    }
+                } catch (e) {
+                    console.error('Handler error:', e);
+                    return 'ERROR: ' + e.message;
+                }
+            }
+        };
+
+        // Send message to Python
+        function sendToFusion(action, data) {
+            if (typeof adsk !== 'undefined' && adsk.fusionSendData) {
+                return adsk.fusionSendData(action, JSON.stringify(data));
+            } else {
+                console.log('Would send to Fusion:', action, data);
+                return Promise.resolve('OK');
+            }
+        }
+
+        // Render tree from state
+        function renderTree() {
+            const container = document.getElementById('benderTree');
+
+            if (benders.length === 0) {
+                container.innerHTML = '<div class="empty-state">No benders configured.<br><br>Click "+ Add Bender" to create one.</div>';
+                return;
+            }
+
+            let html = '';
+            for (const bender of benders) {
+                const isExpanded = expandedBenders.has(bender.id);
+                const expandClass = isExpanded ? 'expanded' : '';
+                const dieCount = bender.dies ? bender.dies.length : 0;
+                const expandIcon = dieCount > 0 ? '&#9654;' : '&#8226;';
+
+                html += `
+                    <div class="bender-node ${expandClass}" data-id="${escapeAttr(bender.id)}">
+                        <div class="bender-header ${expandClass}" onclick="toggleBender('${escapeAttr(bender.id)}')">
+                            <span class="expand-icon">${expandIcon}</span>
+                            <span class="bender-name">${escapeHtml(bender.name)}</span>
+                            <span class="bender-info">Grip: ${bender.min_grip}</span>
+                            <div class="actions" onclick="event.stopPropagation()">
+                                <button class="action-btn" onclick="editBender('${escapeAttr(bender.id)}')" title="Edit Bender">✎</button>
+                                <button class="action-btn delete" onclick="deleteBender('${escapeAttr(bender.id)}')" title="Delete Bender">✕</button>
+                            </div>
+                        </div>
+                        <div class="die-list">
+                            ${renderDies(bender)}
+                            <div class="add-die-row">
+                                <button class="add-die-btn" onclick="addDie('${escapeAttr(bender.id)}')">+ Add Die</button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            container.innerHTML = html;
+        }
+
+        function renderDies(bender) {
+            if (!bender.dies || bender.dies.length === 0) {
+                return '<div class="empty-dies">No dies configured</div>';
+            }
+
+            return bender.dies.map(die => `
+                <div class="die-item" data-id="${escapeAttr(die.id)}">
+                    <span class="die-name">${escapeHtml(die.name)}</span>
+                    <span class="die-info">CLR: ${die.clr}</span>
+                    <div class="actions">
+                        <button class="action-btn" onclick="editDie('${escapeAttr(bender.id)}', '${escapeAttr(die.id)}')" title="Edit Die">✎</button>
+                        <button class="action-btn delete" onclick="deleteDie('${escapeAttr(bender.id)}', '${escapeAttr(die.id)}')" title="Delete Die">✕</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Tree interaction
+        function toggleBender(benderId) {
+            if (expandedBenders.has(benderId)) {
+                expandedBenders.delete(benderId);
+            } else {
+                expandedBenders.add(benderId);
+            }
+            renderTree();
+        }
+
+        // CRUD actions - delegate to Python
+        function addBender() {
+            sendToFusion('addBender', {});
+        }
+
+        function refreshBenders() {
+            sendToFusion('requestBenders', {});
+        }
+
+        function editBender(benderId) {
+            sendToFusion('editBender', { bender_id: benderId });
+        }
+
+        function deleteBender(benderId) {
+            sendToFusion('deleteBender', { bender_id: benderId });
+        }
+
+        function addDie(benderId) {
+            sendToFusion('addDie', { bender_id: benderId });
+        }
+
+        function editDie(benderId, dieId) {
+            sendToFusion('editDie', { bender_id: benderId, die_id: dieId });
+        }
+
+        function deleteDie(benderId, dieId) {
+            sendToFusion('deleteDie', { bender_id: benderId, die_id: dieId });
+        }
+
+        // Helpers
+        function escapeHtml(text) {
+            if (text == null) return '';
+            const div = document.createElement('div');
+            div.textContent = String(text);
+            return div.innerHTML;
+        }
+
+        function escapeAttr(text) {
+            if (text == null) return '';
+            return String(text).replace(/'/g, "\\'").replace(/"/g, '&quot;');
+        }
+
+        function updateBenderInList(updated) {
+            const idx = benders.findIndex(b => b.id === updated.id);
+            if (idx >= 0) {
+                benders[idx] = updated;
+            } else {
+                benders.push(updated);
+            }
+        }
+
+        function removeDieFromBender(benderId, dieId) {
+            const bender = benders.find(b => b.id === benderId);
+            if (bender && bender.dies) {
+                bender.dies = bender.dies.filter(d => d.id !== dieId);
+            }
+        }
+
+        // Request initial data when page loads, with retry for timing issues
+        document.addEventListener('DOMContentLoaded', function() {
+            sendToFusion('requestBenders', {});
+
+            // Retry after a short delay if no data received (handles race condition)
+            setTimeout(function() {
+                if (benders.length === 0) {
+                    sendToFusion('requestBenders', {});
+                }
+            }, 200);
+        });
+    </script>
+</body>
+</html>

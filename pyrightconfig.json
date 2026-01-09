@@ -1,0 +1,11 @@
+{
+    "include": ["."],
+    "exclude": ["**/__pycache__", "**/node_modules"],
+    "pythonVersion": "3.10",
+    "typeCheckingMode": "basic",
+    "reportMissingImports": "warning",
+    "reportMissingTypeStubs": false,
+    "reportUnusedImport": "warning",
+    "reportUnusedVariable": "warning",
+    "stubPath": "./typings"
+}

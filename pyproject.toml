@@ -1,0 +1,46 @@
+[project]
+name = "TubeBendCalculator"
+version = "1.0.0"
+description = "Autodesk Fusion 360 add-in for tube bend calculations"
+requires-python = ">=3.10"
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+ignore_missing_imports = true
+exclude = ["__pycache__"]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 120
+exclude = ["__pycache__", ".git"]
+
+[tool.ruff.lint]
+select = [
+    "E",      # pycodestyle errors
+    "W",      # pycodestyle warnings
+    "F",      # Pyflakes
+    "I",      # isort
+    "B",      # flake8-bugbear
+    "C4",     # flake8-comprehensions
+    "UP",     # pyupgrade
+]
+ignore = [
+    "E501",   # line too long (handled by formatter)
+    "B008",   # do not perform function calls in argument defaults
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["core", "models", "storage", "commands", "lib"]
+
+[tool.pyright]
+pythonVersion = "3.10"
+typeCheckingMode = "basic"
+reportMissingImports = "warning"
+reportMissingTypeStubs = false
+exclude = ["**/__pycache__"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
