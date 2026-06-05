@@ -390,14 +390,20 @@ def detect_receiving_tubes_assembly(
         _check(root.bRepBodies.item(i))
 
     # Check all occurrences (proxy bodies in assembly coordinates)
-    all_occs = root.allOccurrences
-    for i in range(all_occs.count):
-        occ = all_occs.item(i)
-        if not occ.isVisible:
-            skipped_occs += 1
-            continue
-        for j in range(occ.bRepBodies.count):
-            _check(occ.bRepBodies.item(j))
+    try:
+        all_occs = root.allOccurrences
+        for i in range(all_occs.count):
+            occ = all_occs.item(i)
+            if not occ.isVisible:
+                skipped_occs += 1
+                continue
+            for j in range(occ.bRepBodies.count):
+                _check(occ.bRepBodies.item(j))
+    except RuntimeError:
+        # allOccurrences can fail when design isn't fully loaded.
+        # Fall back to recursive traversal of direct child occurrences.
+        futil.log("  WARNING: allOccurrences failed — falling back to recursive traversal")
+        _walk_occurrences(root.occurrences, _check)
 
     futil.log(
         f"detect_receiving_assembly: checked {checked} bodies, "
@@ -407,6 +413,24 @@ def detect_receiving_tubes_assembly(
 
     results.sort(key=lambda x: x[4])
     return [(r[0], r[1], r[2], r[3]) for r in results]
+
+
+def _walk_occurrences(occurrences, check_fn) -> None:
+    """Recursively walk occurrence tree, checking bodies in each."""
+    try:
+        for i in range(occurrences.count):
+            try:
+                occ = occurrences.item(i)
+            except RuntimeError:
+                continue
+            if not occ.isVisible:
+                continue
+            for j in range(occ.bRepBodies.count):
+                check_fn(occ.bRepBodies.item(j))
+            if occ.childOccurrences:
+                _walk_occurrences(occ.childOccurrences, check_fn)
+    except RuntimeError:
+        futil.log("  WARNING: recursive occurrence traversal also failed")
 
 
 # ---------------------------------------------------------------------------
@@ -973,12 +997,14 @@ def _get_cylinder_length_bbox(face: adsk.fusion.BRepFace) -> float:
     bbox = face.boundingBox
 
     projections: list[float] = []
-    for corner in (bbox.minPoint, bbox.maxPoint):
-        dx = corner.x - origin.x
-        dy = corner.y - origin.y
-        dz = corner.z - origin.z
-        proj = dx * axis.x + dy * axis.y + dz * axis.z
-        projections.append(proj)
+    for x in (bbox.minPoint.x, bbox.maxPoint.x):
+        for y in (bbox.minPoint.y, bbox.maxPoint.y):
+            for z in (bbox.minPoint.z, bbox.maxPoint.z):
+                dx = x - origin.x
+                dy = y - origin.y
+                dz = z - origin.z
+                proj = dx * axis.x + dy * axis.y + dz * axis.z
+                projections.append(proj)
 
     return abs(max(projections) - min(projections))
 
@@ -1207,12 +1233,14 @@ def _axis_extreme_point(
         if f.geometry.surfaceType != 1:
             continue
         bbox = f.boundingBox
-        for corner in (bbox.minPoint, bbox.maxPoint):
-            dx = corner.x - origin[0]
-            dy = corner.y - origin[1]
-            dz = corner.z - origin[2]
-            proj = dx * axis[0] + dy * axis[1] + dz * axis[2]
-            projections.append(proj)
+        for x in (bbox.minPoint.x, bbox.maxPoint.x):
+            for y in (bbox.minPoint.y, bbox.maxPoint.y):
+                for z in (bbox.minPoint.z, bbox.maxPoint.z):
+                    dx = x - origin[0]
+                    dy = y - origin[1]
+                    dz = z - origin[2]
+                    proj = dx * axis[0] + dy * axis[1] + dz * axis[2]
+                    projections.append(proj)
 
     if not projections:
         return None
@@ -1311,12 +1339,14 @@ def _axis_both_extremes(
         if f.geometry.surfaceType != 1:
             continue
         bbox = f.boundingBox
-        for corner in (bbox.minPoint, bbox.maxPoint):
-            dx = corner.x - origin[0]
-            dy = corner.y - origin[1]
-            dz = corner.z - origin[2]
-            proj = dx * axis[0] + dy * axis[1] + dz * axis[2]
-            projections.append(proj)
+        for x in (bbox.minPoint.x, bbox.maxPoint.x):
+            for y in (bbox.minPoint.y, bbox.maxPoint.y):
+                for z in (bbox.minPoint.z, bbox.maxPoint.z):
+                    dx = x - origin[0]
+                    dy = y - origin[1]
+                    dz = z - origin[2]
+                    proj = dx * axis[0] + dy * axis[1] + dz * axis[2]
+                    projections.append(proj)
 
     if not projections:
         return None

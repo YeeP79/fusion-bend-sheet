@@ -6,9 +6,11 @@ to produce a complete analysis result from a single BRepBody selection.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Literal
 
+import adsk.core
 import adsk.fusion
 
 from ...models.types import Point3D, Vector3D
@@ -51,6 +53,7 @@ class BodyAnalysisResult:
         end_point: Center point of path end (cm).
         clr_mismatch: Whether CLR values are inconsistent.
         clr_values_display: CLR values in display units.
+        body: The original BRepBody (for diagnostic edge sampling).
         start_receiving: Receiving tubes detected at start.
         end_receiving: Receiving tubes detected at end.
     """
@@ -72,6 +75,7 @@ class BodyAnalysisResult:
     end_point: Point3D
     clr_mismatch: bool
     clr_values_display: list[float]
+    body: adsk.fusion.BRepBody | None = None
     start_receiving: list[tuple[adsk.fusion.BRepBody, Vector3D, float, Point3D]] = field(
         default_factory=list
     )
@@ -177,6 +181,7 @@ def analyze_body(
         end_point=path.end_point,
         clr_mismatch=clr_mismatch,
         clr_values_display=clr_values_display,
+        body=body,
         start_receiving=start_receiving,
         end_receiving=end_receiving,
     )
@@ -227,6 +232,11 @@ def build_cope_pages(
                 _log_cope_summary(
                     "Start", analysis.od, receiving, result, max_z, units,
                 )
+                sampled = _run_profile_comparison(
+                    "Start", analysis.body, ref.tube_direction,
+                    analysis.start_point, ref.extrados_direction,
+                    analysis.body_path.od_radius, result.z_profile, units,
+                )
                 pages.append(CopePageData(
                     end_label=f"{analysis.opposite_direction} End",
                     cope_result=result,
@@ -234,6 +244,7 @@ def build_cope_pages(
                     tube_name=analysis.body_name,
                     has_bends=has_bends,
                     waste_side=waste_side,
+                    sampled_profile=sampled,
                 ))
         except ValueError:
             pass  # Skip if end reference cannot be computed
@@ -261,6 +272,11 @@ def build_cope_pages(
                 _log_cope_summary(
                     "End", analysis.od, receiving, result, max_z, units,
                 )
+                sampled = _run_profile_comparison(
+                    "End", analysis.body, ref.tube_direction,
+                    analysis.end_point, ref.extrados_direction,
+                    analysis.body_path.od_radius, result.z_profile, units,
+                )
                 pages.append(CopePageData(
                     end_label=f"{analysis.travel_direction} End",
                     cope_result=result,
@@ -268,6 +284,7 @@ def build_cope_pages(
                     tube_name=analysis.body_name,
                     has_bends=has_bends,
                     waste_side=waste_side,
+                    sampled_profile=sampled,
                 ))
         except ValueError:
             pass
@@ -424,3 +441,354 @@ def _log_cope_summary(
             f"2x tube OD ({od1:.3f}{units.unit_symbol}) — "
             f"check receiver detection"
         )
+
+
+# ── Diagnostic: body edge sampling & formula comparison ──────────
+
+
+def _run_profile_comparison(
+    end_label: str,
+    body: adsk.fusion.BRepBody | None,
+    tube_direction: Vector3D,
+    cope_point: Point3D,
+    reference_direction: Vector3D | None,
+    od_radius_cm: float,
+    formula_z: list[float],
+    units: "UnitConfig",
+) -> list[float] | None:
+    """Sample body cope edges and compare with formula z-profile.
+
+    Logs diagnostic comparison data. Returns the sampled profile for
+    overlay on the template SVG, or None if sampling fails.
+    """
+    if body is None:
+        return None
+    try:
+        sampled = _sample_body_cope_profile(
+            body, tube_direction, cope_point,
+            reference_direction, od_radius_cm, units,
+        )
+        if sampled is not None:
+            _log_profile_comparison(end_label, formula_z, sampled, units)
+            return sampled
+        else:
+            futil.log(
+                f"  DIAGNOSTIC ({end_label}): No cope edges found on body — "
+                f"body may not be coped yet"
+            )
+            return None
+    except Exception as e:
+        futil.log(f"  DIAGNOSTIC ({end_label}): Edge sampling failed: {e}")
+        return None
+
+
+def _sample_body_cope_profile(
+    body: adsk.fusion.BRepBody,
+    tube_direction: Vector3D,
+    cope_point: Point3D,
+    reference_direction: Vector3D | None,
+    od_radius_cm: float,
+    units: "UnitConfig",
+) -> list[float] | None:
+    """Sample actual cope edge profile from BRepBody geometry.
+
+    Collects non-circle edges from OD cylinder faces, samples points
+    along each edge, converts to cylindrical coordinates aligned with
+    the formula's reference system, and builds a 1-degree depth profile.
+
+    Args:
+        body: The tube BRepBody to sample.
+        tube_direction: Tube centerline unit vector (outward from cope end).
+        cope_point: Tube endpoint on the centerline (cm).
+        reference_direction: Extrados (back-of-bend) direction, or None.
+        od_radius_cm: Tube OD radius in cm.
+        units: Unit configuration for conversion.
+
+    Returns:
+        360-element depth profile in display units, or None if no edges found.
+    """
+    axis_dir = adsk.core.Vector3D.create(
+        tube_direction[0], tube_direction[1], tube_direction[2],
+    )
+    axis_dir.normalize()
+    axis_origin = adsk.core.Point3D.create(
+        cope_point[0], cope_point[1], cope_point[2],
+    )
+
+    # Build reference direction aligned with the formula's reference
+    if reference_direction is not None:
+        ref_dir = _project_ref_direction(reference_direction, tube_direction)
+    else:
+        ref_dir = _build_ref_dir_fusion(axis_dir)
+
+    # Collect non-circle edges from OD cylinder faces
+    edges = _collect_od_intersection_edges(body, od_radius_cm)
+    if not edges:
+        return None
+
+    futil.log(f"  DIAGNOSTIC: found {len(edges)} intersection edges on OD faces")
+
+    # Sample edge points and convert to cylindrical coordinates
+    curve_types = {
+        0: "Line", 1: "Arc", 2: "Circle", 3: "Ellipse",
+        4: "EllArc", 5: "InfLine", 6: "NURBS",
+    }
+    all_points: list[tuple[float, float]] = []  # (azimuth_deg, z_cm)
+    sampled_count = 0
+    failed_count = 0
+    for ei, edge in enumerate(edges):
+        ct = edge.geometry.curveType
+        ct_name = curve_types.get(ct, f"Unknown({ct})")
+        try:
+            evaluator = edge.evaluator
+            ok_range, t_start, t_end = evaluator.getParameterExtents()
+            if not ok_range:
+                futil.log(
+                    f"  DIAGNOSTIC: edge {ei} ({ct_name}) — "
+                    f"getParameterExtents failed"
+                )
+                failed_count += 1
+                continue
+            edge_points = 0
+            for i in range(101):
+                t = t_start + (t_end - t_start) * i / 100
+                ok, point = evaluator.getPointAtParameter(t)
+                if not ok:
+                    continue
+                azimuth, z, r = _point_to_cylindrical_fusion(
+                    point, axis_origin, axis_dir, ref_dir,
+                )
+                # Only keep points on the OD surface (within tolerance)
+                if abs(r - od_radius_cm) < 0.05:
+                    all_points.append((azimuth, z))
+                    edge_points += 1
+            sampled_count += 1
+            futil.log(
+                f"  DIAGNOSTIC: edge {ei} ({ct_name}) — "
+                f"{edge_points} OD pts, len={edge.length:.3f} cm"
+            )
+        except Exception as e:
+            failed_count += 1
+            futil.log(
+                f"  DIAGNOSTIC: edge {ei} ({ct_name}) — "
+                f"evaluator error: {e}"
+            )
+
+    futil.log(
+        f"  DIAGNOSTIC: {sampled_count} edges sampled, "
+        f"{failed_count} failed, {len(all_points)} total OD points"
+    )
+
+    if not all_points:
+        futil.log("  DIAGNOSTIC: no valid OD points sampled from edges")
+        return None
+
+    # Z-proximity filter: only keep points near THIS cope end.
+    # The cope point is the cylindrical origin (z=0). Edges from the
+    # other cope end will have large |z| (~tube length) and must be
+    # excluded. The cope profile depth is at most a few OD diameters,
+    # so |z| < 4×OD is a safe threshold.
+    z_threshold = 4 * (2 * od_radius_cm)
+    filtered = [(a, z) for a, z in all_points if abs(z) <= z_threshold]
+    rejected = len(all_points) - len(filtered)
+    futil.log(
+        f"  DIAGNOSTIC: |z| threshold {z_threshold:.2f} cm (4×OD), "
+        f"{len(filtered)} kept, {rejected} rejected (other end)"
+    )
+
+    if not filtered:
+        return None
+
+    # Build 1-degree depth profile using min-z per degree.
+    # The cope_point may not be exactly at the tube end (it can be
+    # offset by a few cm). Using min(z) per degree captures the deepest
+    # edge point at each angle, then depth = z_max - z_at_deg gives
+    # depth relative to the shallowest point (tube end), automatically
+    # cancelling any cope_point offset.
+    bins_min_z: dict[int, float] = {}
+    for azimuth, z in filtered:
+        deg = int(round(azimuth)) % 360
+        if deg not in bins_min_z or z < bins_min_z[deg]:
+            bins_min_z[deg] = z
+
+    if not bins_min_z:
+        return None
+
+    # z_max = shallowest point across all degrees ≈ tube end
+    z_tube_end = max(bins_min_z.values())
+    futil.log(
+        f"  DIAGNOSTIC: z_tube_end offset from cope_point: "
+        f"{z_tube_end:.3f} cm ({z_tube_end * units.cm_to_unit:.4f}{units.unit_symbol})"
+    )
+
+    # Convert to depth relative to tube end, in display units
+    profile: list[float] = [0.0] * 360
+    for deg, z in bins_min_z.items():
+        depth_cm = z_tube_end - z
+        profile[deg] = depth_cm * units.cm_to_unit
+
+    covered = sum(1 for z in profile if z > 0.001)
+    futil.log(f"  DIAGNOSTIC: profile coverage {covered}/360 degrees")
+
+    return profile
+
+
+def _collect_od_intersection_edges(
+    body: adsk.fusion.BRepBody,
+    od_radius_cm: float,
+) -> list[adsk.fusion.BRepEdge]:
+    """Collect unique non-circle edges from OD cylinder faces."""
+    edges: list[adsk.fusion.BRepEdge] = []
+    seen: set[int] = set()
+    for i in range(body.faces.count):
+        face = body.faces.item(i)
+        if face.geometry.surfaceType != 1:  # Not a cylinder
+            continue
+        if abs(face.geometry.radius - od_radius_cm) > 0.01:
+            continue
+        for j in range(face.edges.count):
+            edge = face.edges.item(j)
+            if edge.geometry.curveType == 2:  # Circle — skip
+                continue
+            eid = edge.tempId
+            if eid in seen:
+                continue
+            seen.add(eid)
+            edges.append(edge)
+    return edges
+
+
+def _point_to_cylindrical_fusion(
+    point: adsk.core.Point3D,
+    axis_origin: adsk.core.Point3D,
+    axis_dir: adsk.core.Vector3D,
+    ref_dir: adsk.core.Vector3D,
+) -> tuple[float, float, float]:
+    """Convert a 3D point to cylindrical coordinates (azimuth_deg, z, r).
+
+    Uses the same angular convention as cope_math._compute_rotation_mark:
+    azimuth increases CCW when viewed from the positive axis_dir direction.
+    """
+    dx = point.x - axis_origin.x
+    dy = point.y - axis_origin.y
+    dz = point.z - axis_origin.z
+    # Axial component (signed distance along tube axis)
+    z = dx * axis_dir.x + dy * axis_dir.y + dz * axis_dir.z
+    # Radial component (perpendicular to axis)
+    rx = dx - z * axis_dir.x
+    ry = dy - z * axis_dir.y
+    rz = dz - z * axis_dir.z
+    r = math.sqrt(rx * rx + ry * ry + rz * rz)
+    # Azimuth from reference direction
+    cos_a = rx * ref_dir.x + ry * ref_dir.y + rz * ref_dir.z
+    # Perpendicular direction in cross-section plane: axis × ref
+    perp_x = axis_dir.y * ref_dir.z - axis_dir.z * ref_dir.y
+    perp_y = axis_dir.z * ref_dir.x - axis_dir.x * ref_dir.z
+    perp_z = axis_dir.x * ref_dir.y - axis_dir.y * ref_dir.x
+    sin_a = rx * perp_x + ry * perp_y + rz * perp_z
+    azimuth = math.degrees(math.atan2(sin_a, cos_a)) % 360
+    return azimuth, z, r
+
+
+def _project_ref_direction(
+    reference_direction: Vector3D,
+    tube_direction: Vector3D,
+) -> adsk.core.Vector3D:
+    """Project reference_direction onto the plane perpendicular to tube axis.
+
+    Returns a Fusion Vector3D suitable for cylindrical coordinate conversion.
+    Falls back to an arbitrary perpendicular if projection has zero magnitude.
+    """
+    dot_val = (
+        reference_direction[0] * tube_direction[0]
+        + reference_direction[1] * tube_direction[1]
+        + reference_direction[2] * tube_direction[2]
+    )
+    proj = (
+        reference_direction[0] - dot_val * tube_direction[0],
+        reference_direction[1] - dot_val * tube_direction[1],
+        reference_direction[2] - dot_val * tube_direction[2],
+    )
+    mag = math.sqrt(proj[0] ** 2 + proj[1] ** 2 + proj[2] ** 2)
+    if mag > 1e-10:
+        ref = adsk.core.Vector3D.create(
+            proj[0] / mag, proj[1] / mag, proj[2] / mag,
+        )
+    else:
+        axis = adsk.core.Vector3D.create(
+            tube_direction[0], tube_direction[1], tube_direction[2],
+        )
+        ref = _build_ref_dir_fusion(axis)
+    return ref
+
+
+def _build_ref_dir_fusion(
+    axis_dir: adsk.core.Vector3D,
+) -> adsk.core.Vector3D:
+    """Build an arbitrary reference direction perpendicular to axis_dir."""
+    if abs(axis_dir.y) < 0.9:
+        up = adsk.core.Vector3D.create(0, 1, 0)
+    else:
+        up = adsk.core.Vector3D.create(0, 0, 1)
+    d = axis_dir.x * up.x + axis_dir.y * up.y + axis_dir.z * up.z
+    ref = adsk.core.Vector3D.create(
+        up.x - d * axis_dir.x,
+        up.y - d * axis_dir.y,
+        up.z - d * axis_dir.z,
+    )
+    ref.normalize()
+    return ref
+
+
+def _log_profile_comparison(
+    end_label: str,
+    formula_z: list[float],
+    sampled_z: list[float],
+    units: "UnitConfig",
+) -> None:
+    """Log comparison between formula z-profile and sampled body profile."""
+    futil.log(f"  === PROFILE COMPARISON: {end_label} end ===")
+
+    # Compute deltas only at degrees with sampled coverage
+    deltas: list[tuple[int, float]] = []
+    for deg in range(360):
+        if sampled_z[deg] > 0.001:
+            delta = formula_z[deg] - sampled_z[deg]
+            deltas.append((deg, delta))
+
+    if not deltas:
+        futil.log("  No overlapping data for comparison")
+        return
+
+    abs_deltas = [abs(d) for _, d in deltas]
+    max_abs = max(abs_deltas)
+    avg_abs = sum(abs_deltas) / len(abs_deltas)
+    max_deg = deltas[abs_deltas.index(max_abs)][0]
+
+    sampled_max = max(s for s in sampled_z if s > 0.001)
+    formula_max = max(formula_z) if formula_z else 0.0
+
+    futil.log(f"  comparison points: {len(deltas)}/360")
+    futil.log(f"  formula  max depth: {formula_max:.4f}{units.unit_symbol}")
+    futil.log(f"  sampled  max depth: {sampled_max:.4f}{units.unit_symbol}")
+    futil.log(f"  avg |delta|: {avg_abs:.4f}{units.unit_symbol}")
+    futil.log(f"  max |delta|: {max_abs:.4f}{units.unit_symbol} at {max_deg}°")
+
+    # Detailed comparison at 15-degree intervals
+    futil.log(f"  {'Deg':>4} {'Formula':>9} {'Sampled':>9} {'Delta':>9}")
+    for deg in range(0, 360, 15):
+        fz = formula_z[deg]
+        sz = sampled_z[deg]
+        if sz > 0.001:
+            d = fz - sz
+            futil.log(
+                f"  {deg:>4}  {fz:>8.4f}{units.unit_symbol}"
+                f"  {sz:>8.4f}{units.unit_symbol}"
+                f"  {d:>+8.4f}{units.unit_symbol}"
+            )
+        else:
+            futil.log(
+                f"  {deg:>4}  {fz:>8.4f}{units.unit_symbol}"
+                f"  {'---':>9}"
+                f"  {'---':>9}"
+            )

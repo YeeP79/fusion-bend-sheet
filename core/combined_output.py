@@ -35,6 +35,8 @@ class CopePageData:
         od1: Tube OD in display units (inches).
         tube_name: Name of the incoming tube.
         has_bends: Whether the tube has bends (affects SVG instructions).
+        sampled_profile: Body edge profile sampled from the Fusion model
+            (360 floats in display units). None when not available.
     """
     end_label: str
     cope_result: CopeResult
@@ -43,6 +45,7 @@ class CopePageData:
     has_bends: bool
     location: str = ""
     waste_side: Literal["top", "bottom"] = "top"
+    sampled_profile: list[float] | None = None
 
 
 def generate_combined_document(
@@ -119,6 +122,7 @@ def _render_cope_page(page: CopePageData, *, is_first: bool = False) -> str:
         has_bends=page.has_bends,
         location=page.location,
         waste_side=page.waste_side,
+        sampled_profile=page.sampled_profile,
     )
 
     # Strip XML declaration — not valid inside HTML

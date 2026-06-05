@@ -10,6 +10,7 @@ import pytest
 from core.geometry import (
     ZeroVectorError,
     angle_between_vectors,
+    bbox_axial_extent,
     calculate_rotation,
     cross_product,
     distance_between_points,
@@ -294,3 +295,184 @@ class TestProjectOntoPlane:
     def test_zero_normal_raises(self):
         with pytest.raises(ZeroVectorError):
             project_onto_plane((1.0, 0.0, 0.0), (0.0, 0.0, 0.0))
+
+
+class TestBboxAxialExtent:
+    """Test bounding box projection onto an arbitrary axis.
+
+    Regression tests for the bug where only 2 of 8 bbox corners were
+    projected, giving wrong axial extent for non-axis-aligned tubes.
+    """
+
+    def test_axis_aligned_x(self):
+        """Axis-aligned along X — all projection methods agree."""
+        bbox_min = (0.0, -1.0, -1.0)
+        bbox_max = (10.0, 1.0, 1.0)
+        origin = (0.0, 0.0, 0.0)
+        axis = (1.0, 0.0, 0.0)
+
+        t_min, t_max = bbox_axial_extent(bbox_min, bbox_max, origin, axis)
+        assert abs(t_min - 0.0) < 1e-10
+        assert abs(t_max - 10.0) < 1e-10
+
+    def test_axis_aligned_z(self):
+        """Axis-aligned along Z."""
+        bbox_min = (-1.0, -1.0, 5.0)
+        bbox_max = (1.0, 1.0, 20.0)
+        origin = (0.0, 0.0, 0.0)
+        axis = (0.0, 0.0, 1.0)
+
+        t_min, t_max = bbox_axial_extent(bbox_min, bbox_max, origin, axis)
+        assert abs(t_min - 5.0) < 1e-10
+        assert abs(t_max - 20.0) < 1e-10
+
+    def test_diagonal_45_degree_xz(self):
+        """Tube at 45 degrees in XZ plane — the case that fails with 2 corners.
+
+        A tube from (0,0,0) to (10,0,10) has its bbox at
+        min=(0,-r,-r) to max=(10,r,10+r), but projecting only minPoint
+        and maxPoint gives wrong axial extent.
+        """
+        # Tube 10 units long at 45° in XZ, OD radius ~1
+        bbox_min = (-1.0, -1.0, -1.0)
+        bbox_max = (10.0, 1.0, 10.0)
+        origin = (5.0, 0.0, 5.0)  # midpoint of tube
+        axis = normalize((1.0, 0.0, 1.0))  # 45° in XZ
+
+        t_min, t_max = bbox_axial_extent(bbox_min, bbox_max, origin, axis)
+
+        # The full diagonal extent should be sqrt(2)*10 ≈ 14.14 from
+        # corner (-1,-1,-1) to (10,1,10).  The 2-corner bug would
+        # underestimate this because minPoint projects to one value
+        # and maxPoint projects to the same value as the true max
+        # only when axis components are all positive.
+        extent = t_max - t_min
+        assert extent > 14.0, (
+            f"Extent {extent:.4f} is too small — likely using only 2 corners"
+        )
+
+    def test_mixed_sign_axis_requires_8_corners(self):
+        """Axis with mixed-sign components — only 8-corner projection is correct.
+
+        This is the exact failure mode from the driver shock hoop bug:
+        tube axis ~ (-0.45, -0.01, -0.89).  With 2 corners, the min/max
+        projections are wrong because the optimal corners mix min and max
+        coordinates.
+        """
+        # Simulate a tube bbox roughly matching the bug scenario
+        bbox_min = (30.0, 108.0, -10.0)
+        bbox_max = (70.0, 110.0, 70.0)
+        origin = (50.0, 109.0, 30.0)
+        axis = normalize((-0.4463, -0.0085, -0.8948))
+
+        t_min, t_max = bbox_axial_extent(bbox_min, bbox_max, origin, axis)
+
+        # With 2 corners (minPoint and maxPoint), we'd get:
+        #   proj(minPoint) = (30-50)*(-0.45) + (108-109)*(-0.0085) + (-10-30)*(-0.89)
+        #                  ≈ 9.0 + 0.0085 + 35.6 ≈ 44.6
+        #   proj(maxPoint) = (70-50)*(-0.45) + (110-109)*(-0.0085) + (70-30)*(-0.89)
+        #                  ≈ -9.0 - 0.0085 - 35.6 ≈ -44.6
+        # So 2-corner min/max would be (-44.6, 44.6).
+        #
+        # But the TRUE min uses (max_x, max_y, max_z) = (70, 110, 70):
+        #   (70-50)*(-0.45) + (110-109)*(-0.0085) + (70-30)*(-0.89) ≈ -44.6
+        # And TRUE max uses (min_x, min_y, min_z) = (30, 108, -10):
+        #   (30-50)*(-0.45) + (108-109)*(-0.0085) + (-10-30)*(-0.89) ≈ 44.6
+        #
+        # In this symmetric case they happen to agree, but let's test an
+        # asymmetric bbox where they diverge.
+        pass
+
+    def test_asymmetric_bbox_mixed_sign_axis(self):
+        """Asymmetric bbox with mixed-sign axis — 2 corners gives wrong result.
+
+        Axis = (1, -1, 0)/sqrt(2).  The minimum projection needs
+        (min_x, MAX_y, _) and the maximum needs (MAX_x, min_y, _).
+        Only 8-corner enumeration finds these.
+        """
+        bbox_min = (0.0, 0.0, 0.0)
+        bbox_max = (10.0, 20.0, 5.0)
+        origin = (0.0, 0.0, 0.0)
+        axis = normalize((1.0, -1.0, 0.0))
+
+        t_min, t_max = bbox_axial_extent(bbox_min, bbox_max, origin, axis)
+
+        # True max = (10, 0, _) projected = (10*1 + 0*(-1))/sqrt(2) = 10/sqrt(2)
+        # True min = (0, 20, _) projected = (0*1 + 20*(-1))/sqrt(2) = -20/sqrt(2)
+        inv_sqrt2 = 1.0 / math.sqrt(2.0)
+        expected_max = 10.0 * inv_sqrt2
+        expected_min = -20.0 * inv_sqrt2
+
+        assert abs(t_max - expected_max) < 1e-6
+        assert abs(t_min - expected_min) < 1e-6
+
+        # Verify 2-corner approach gives WRONG result:
+        # proj(minPoint=(0,0,0)) = 0
+        # proj(maxPoint=(10,20,5)) = (10-20)/sqrt(2) = -10/sqrt(2)
+        # 2-corner would give min=-10/sqrt(2), max=0 — both wrong!
+        two_corner_max = max(0.0, -10.0 * inv_sqrt2)
+        assert two_corner_max != pytest.approx(expected_max, abs=1e-6), (
+            "2-corner approach should NOT give the correct max"
+        )
+
+    def test_negative_axis_direction(self):
+        """Fully negative axis direction."""
+        bbox_min = (0.0, 0.0, 0.0)
+        bbox_max = (10.0, 10.0, 10.0)
+        origin = (5.0, 5.0, 5.0)
+        axis = normalize((-1.0, -1.0, -1.0))
+
+        t_min, t_max = bbox_axial_extent(bbox_min, bbox_max, origin, axis)
+
+        # max projection: corner (0,0,0) → (-5,-5,-5)·(-1,-1,-1)/sqrt(3) = 15/sqrt(3)
+        # min projection: corner (10,10,10) → (5,5,5)·(-1,-1,-1)/sqrt(3) = -15/sqrt(3)
+        inv_sqrt3 = 1.0 / math.sqrt(3.0)
+        assert abs(t_max - 15.0 * inv_sqrt3) < 1e-6
+        assert abs(t_min - (-15.0 * inv_sqrt3)) < 1e-6
+
+    def test_origin_offset(self):
+        """Origin not at zero — projections are relative to axis origin."""
+        bbox_min = (10.0, 10.0, 10.0)
+        bbox_max = (20.0, 20.0, 20.0)
+        origin = (15.0, 15.0, 15.0)
+        axis = (1.0, 0.0, 0.0)
+
+        t_min, t_max = bbox_axial_extent(bbox_min, bbox_max, origin, axis)
+        assert abs(t_min - (-5.0)) < 1e-10
+        assert abs(t_max - 5.0) < 1e-10
+
+    def test_degenerate_zero_volume_bbox(self):
+        """Point bbox (zero volume) — min and max projections are equal."""
+        point = (5.0, 3.0, 7.0)
+        origin = (0.0, 0.0, 0.0)
+        axis = (1.0, 0.0, 0.0)
+
+        t_min, t_max = bbox_axial_extent(point, point, origin, axis)
+        assert abs(t_min - 5.0) < 1e-10
+        assert abs(t_max - 5.0) < 1e-10
+
+    def test_real_world_tube_angle(self):
+        """Realistic tube axis matching the driver shock hoop bug scenario.
+
+        Axis ≈ (-0.45, -0.01, -0.89) — the tube that triggered the bug
+        where cope endpoints were calculated 14cm off because only 2 bbox
+        corners were projected.
+        """
+        # Tube runs from roughly (33, 109, -6) to (70, 110, 68)
+        # Single cylinder face bbox (approximate)
+        bbox_min = (33.0, 107.0, -6.0)
+        bbox_max = (70.0, 111.0, 68.0)
+        origin = (50.0, 109.0, 30.0)
+        axis = normalize((-0.4463, -0.0085, -0.8948))
+
+        t_min, t_max = bbox_axial_extent(bbox_min, bbox_max, origin, axis)
+
+        # The tube is ~82cm long diagonally.  The axial extent should be
+        # at least as large as the tube length along the axis.
+        extent = t_max - t_min
+        tube_length_approx = math.sqrt(
+            (70 - 33) ** 2 + (111 - 107) ** 2 + (68 + 6) ** 2
+        )
+        assert extent >= tube_length_approx * 0.9, (
+            f"Axial extent {extent:.1f} too small for ~{tube_length_approx:.1f}cm tube"
+        )

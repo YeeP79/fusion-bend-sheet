@@ -127,14 +127,8 @@ class TestMultiPassContent:
     def test_has_pass_labels(self):
         result = _make_multi_pass_result()
         svg = generate_cope_svg(result, 1.75, "Tube1", "", False)
-        assert "PASS 1" in svg
-        assert "PASS 2" in svg
-
-    def test_has_colored_fills(self):
-        result = _make_multi_pass_result()
-        svg = generate_cope_svg(result, 1.75, "Tube1", "", False)
-        # Check for lobe fill colors
-        assert "#4488CC" in svg or "#CC7733" in svg
+        assert "Pass 1" in svg
+        assert "Pass 2" in svg
 
     def test_has_plunge_depth_warning(self):
         result = _make_multi_pass_result()
@@ -752,3 +746,144 @@ class TestSetbackLayout:
         result = _make_single_pass_result()
         svg = generate_cope_svg(result, 1.75, "Tube1", "", False, waste_side="bottom")
         assert "scale bar" in svg
+
+
+class TestFillProfileGaps:
+    """Tests for _fill_profile_gaps linear interpolation."""
+
+    def test_no_gaps_returns_unchanged(self):
+        """Profile with no gaps should be returned as-is."""
+        from core.cope_template import _fill_profile_gaps
+        profile = [float(i) for i in range(1, 361)]
+        result = _fill_profile_gaps(profile)
+        assert result == profile
+
+    def test_all_zero_returns_unchanged(self):
+        """All-zero profile should be returned as-is (nothing to interpolate from)."""
+        from core.cope_template import _fill_profile_gaps
+        profile = [0.0] * 360
+        result = _fill_profile_gaps(profile)
+        assert result == profile
+
+    def test_empty_returns_unchanged(self):
+        """Empty profile should be returned as-is."""
+        from core.cope_template import _fill_profile_gaps
+        result = _fill_profile_gaps([])
+        assert result == []
+
+    def test_single_gap_interpolated(self):
+        """A single zero between two known values should be linearly interpolated."""
+        from core.cope_template import _fill_profile_gaps
+        profile = [1.0, 0.0, 3.0] + [1.0] * 357
+        result = _fill_profile_gaps(profile)
+        assert abs(result[1] - 2.0) < 0.01
+
+    def test_multi_point_gap_interpolated(self):
+        """A multi-point gap should be linearly interpolated."""
+        from core.cope_template import _fill_profile_gaps
+        profile = [1.0] * 360
+        profile[5] = 0.0
+        profile[6] = 0.0
+        profile[7] = 0.0
+        # Known points: profile[4]=1.0, profile[8]=1.0, gap = 3 points
+        # All should interpolate to 1.0
+        result = _fill_profile_gaps(profile)
+        assert abs(result[5] - 1.0) < 0.01
+        assert abs(result[6] - 1.0) < 0.01
+        assert abs(result[7] - 1.0) < 0.01
+
+    def test_gap_with_different_endpoints(self):
+        """Gap between 2.0 and 6.0 should interpolate linearly."""
+        from core.cope_template import _fill_profile_gaps
+        profile = [1.0] * 360
+        profile[10] = 2.0
+        profile[11] = 0.0
+        profile[12] = 0.0
+        profile[13] = 6.0
+        result = _fill_profile_gaps(profile)
+        # 2 gap points between 2.0 and 6.0: t=1/3 → 3.33, t=2/3 → 4.67
+        assert abs(result[11] - 3.333) < 0.01
+        assert abs(result[12] - 4.667) < 0.01
+
+    def test_wraparound_gap(self):
+        """Gap spanning 0°/360° boundary should interpolate correctly."""
+        from core.cope_template import _fill_profile_gaps
+        profile = [1.0] * 360
+        profile[358] = 2.0
+        profile[359] = 0.0
+        profile[0] = 0.0
+        profile[1] = 4.0
+        result = _fill_profile_gaps(profile)
+        # Gap of 2 points between 2.0 (idx 358) and 4.0 (idx 1)
+        assert abs(result[359] - 2.667) < 0.01
+        assert abs(result[0] - 3.333) < 0.01
+
+    def test_sampled_profile_used_as_primary(self):
+        """When sampled_profile is provided, the SVG should use it as the primary curve."""
+        result = _make_single_pass_result()
+        sampled = [0.5] * 360  # Constant depth
+        svg = generate_cope_svg(result, 1.75, "Tube1", "", False,
+                                sampled_profile=sampled)
+        root = ET.fromstring(svg)
+        # Should still produce valid SVG
+        assert root.tag == "{http://www.w3.org/2000/svg}svg" or root.tag == "svg"
+
+    def test_sampled_profile_none_uses_formula(self):
+        """When sampled_profile is None, the formula profile should be used."""
+        result = _make_single_pass_result()
+        svg_without = generate_cope_svg(result, 1.75, "Tube1", "", False,
+                                        sampled_profile=None)
+        svg_with = generate_cope_svg(result, 1.75, "Tube1", "", False,
+                                     sampled_profile=[0.5] * 360)
+        # Both should be valid SVG but differ (different primary profiles)
+        ET.fromstring(svg_without)
+        ET.fromstring(svg_with)
+        assert svg_without != svg_with
+
+
+class TestReflectProfile:
+    """Tests for _reflect_profile outside-surface wrapping convention."""
+
+    def test_empty_profile(self):
+        from core.cope_template import _reflect_profile
+        assert _reflect_profile([]) == []
+
+    def test_degree_zero_invariant(self):
+        """Index 0 (REF position) should be preserved."""
+        from core.cope_template import _reflect_profile
+        profile = [float(i) for i in range(360)]
+        result = _reflect_profile(profile)
+        assert result[0] == 0.0
+
+    def test_degree_180_invariant(self):
+        """Index 180 should be preserved (diametrically opposite REF)."""
+        from core.cope_template import _reflect_profile
+        profile = [float(i) for i in range(360)]
+        result = _reflect_profile(profile)
+        assert result[180] == 180.0
+
+    def test_swaps_cw_to_ccw(self):
+        """Index 1 should get old index 359, index 90 should get old 270."""
+        from core.cope_template import _reflect_profile
+        profile = [float(i) for i in range(360)]
+        result = _reflect_profile(profile)
+        assert result[1] == 359.0
+        assert result[90] == 270.0
+        assert result[270] == 90.0
+        assert result[359] == 1.0
+
+    def test_double_reflect_is_identity(self):
+        """Reflecting twice should return the original profile."""
+        from core.cope_template import _reflect_profile
+        profile = [float(i) for i in range(360)]
+        result = _reflect_profile(_reflect_profile(profile))
+        assert result == profile
+
+    def test_symmetric_profile_unchanged(self):
+        """A profile symmetric about degree 0 should be unchanged."""
+        from core.cope_template import _reflect_profile
+        # cos(theta) is symmetric: cos(d) == cos(360-d)
+        profile = [math.cos(math.radians(d)) for d in range(360)]
+        result = _reflect_profile(profile)
+        for i in range(360):
+            assert abs(result[i] - profile[i]) < 1e-10

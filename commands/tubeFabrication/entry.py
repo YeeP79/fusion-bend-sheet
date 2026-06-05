@@ -348,8 +348,10 @@ def command_execute(args: adsk.core.CommandEventArgs) -> None:
         else:
             waste_side = "top"
 
-        # Build cope pages for coped ends
+        # Build cope pages for coped ends, matching bend sheet direction
         cope_pages = build_cope_pages(_analysis, units, waste_side=waste_side)
+        if travel_reversed:
+            cope_pages.reverse()
 
         # Generate combined HTML
         html = generate_combined_document(result.data, cope_pages)

@@ -334,6 +334,40 @@ class TestParallelTubes:
             )
 
 
+    def test_parallel_filtered_when_valid_receivers_exist(self):
+        """Parallel receivers should be filtered, not crash, when valid receivers exist."""
+        result = calculate_cope(
+            v1=(1.0, 0.0, 0.0),
+            od1=1.75,
+            receiving_tubes=[
+                # Parallel (self-detection) — should be filtered
+                ReceivingTube(vector=(-1.0, 0.0, 0.0), od=1.75, name="self-occ-1"),
+                ReceivingTube(vector=(-1.0, 0.0, 0.0), od=1.51, name="self-occ-2"),
+                # Valid receiver — should be used
+                ReceivingTube(vector=(0.0, 1.0, 0.0), od=1.75, name="cross tube"),
+            ],
+        )
+        # Should succeed with the valid receiver
+        assert len(result.passes) >= 1
+        assert result.passes[0].receiver_name == "cross tube"
+        # Should have warnings about the parallel receivers
+        assert any("self-occ-1" in w for w in result.warnings)
+        assert any("self-occ-2" in w for w in result.warnings)
+        assert any("parallel" in w.lower() for w in result.warnings)
+
+    def test_all_parallel_raises(self):
+        """When ALL receivers are parallel, ValueError should still be raised."""
+        with pytest.raises(ValueError, match="parallel"):
+            calculate_cope(
+                v1=(1.0, 0.0, 0.0),
+                od1=1.75,
+                receiving_tubes=[
+                    ReceivingTube(vector=(-1.0, 0.0, 0.0), od=1.75),
+                    ReceivingTube(vector=(1.0, 0.0, 0.0), od=1.51),
+                ],
+            )
+
+
 class TestZeroVectors:
     """Zero-length vectors should raise ZeroVectorError."""
 
@@ -762,7 +796,7 @@ class TestComputeZProfile:
         z(0) = R2 = 1.0, z(90) = sqrt(R2²-R1²) ≈ 0.866."""
         # R1=0.5 (od1=1.0), R2=1.0 (od=2.0), alpha=90°
         rt = ReceivingTube(vector=(0.0, 1.0, 0.0), od=2.0)
-        z = _compute_z_profile([rt], [90.0], [0.0], r1=0.5)
+        z, _ = _compute_z_profile([rt], [90.0], [0.0], r1=0.5)
         assert len(z) == 360
         # z(0) = sqrt(R2²) = R2 = 1.0
         assert abs(z[0] - 1.0) < 0.01
@@ -784,7 +818,7 @@ class TestComputeZProfile:
         # z = R·|cos(phi)| / 1 = R·|cos(phi)|
         # So z(0) = R = 1.0, z(90) = 0, z(180) = R = 1.0
         rt = ReceivingTube(vector=(0.0, 1.0, 0.0), od=2.0)
-        z = _compute_z_profile([rt], [90.0], [0.0], r1=1.0)
+        z, _ = _compute_z_profile([rt], [90.0], [0.0], r1=1.0)
         assert len(z) == 360
         assert abs(z[0] - 1.0) < 0.01
         assert abs(z[90] - 0.0) < 0.01
@@ -795,8 +829,8 @@ class TestComputeZProfile:
         """When R1 << R2, angled peak is larger than perpendicular peak."""
         # R1=0.25 (od1=0.5), R2=1.0 (od=2.0)
         rt = ReceivingTube(vector=(0.0, 1.0, 0.0), od=2.0)
-        z_perp = _compute_z_profile([rt], [90.0], [0.0], r1=0.25)
-        z_angled = _compute_z_profile([rt], [45.0], [0.0], r1=0.25)
+        z_perp, _ = _compute_z_profile([rt], [90.0], [0.0], r1=0.25)
+        z_angled, _ = _compute_z_profile([rt], [45.0], [0.0], r1=0.25)
         # Small R1 relative to R2: exact ≈ simplified, angled peak is larger
         assert max(z_angled) > max(z_perp)
 
@@ -807,8 +841,8 @@ class TestComputeZProfile:
         # Back (phi=180): z = [sqrt(1-0) + cos(45°)] / sin(45°) ≈ 2.4142
         # vs perpendicular same-OD: z(0) = R·|cos(0)| = 1.0
         rt = ReceivingTube(vector=(0.0, 1.0, 0.0), od=2.0)
-        z_perp = _compute_z_profile([rt], [90.0], [0.0], r1=1.0)
-        z_angled = _compute_z_profile([rt], [45.0], [0.0], r1=1.0)
+        z_perp, _ = _compute_z_profile([rt], [90.0], [0.0], r1=1.0)
+        z_angled, _ = _compute_z_profile([rt], [45.0], [0.0], r1=1.0)
         # Front peak (phi=0, at azimuth offset) is smaller than perpendicular
         assert z_angled[0] < z_perp[0]
         # Verify the front peak value: R·tan(alpha/2) = tan(22.5°) ≈ 0.4142
@@ -820,8 +854,8 @@ class TestComputeZProfile:
         """Multi-receiver profile is the max of individual profiles."""
         rt1 = ReceivingTube(vector=(0.0, 1.0, 0.0), od=2.0)
         rt2 = ReceivingTube(vector=(0.0, -1.0, 0.0), od=2.0)
-        z_single = _compute_z_profile([rt1], [90.0], [0.0], r1=0.5)
-        z_multi = _compute_z_profile([rt1, rt2], [90.0, 90.0], [0.0, 180.0], r1=0.5)
+        z_single, _ = _compute_z_profile([rt1], [90.0], [0.0], r1=0.5)
+        z_multi, _ = _compute_z_profile([rt1, rt2], [90.0, 90.0], [0.0, 180.0], r1=0.5)
         # Multi should be >= single at every point
         for i in range(360):
             assert z_multi[i] >= z_single[i] - 1e-10
@@ -829,14 +863,14 @@ class TestComputeZProfile:
     def test_all_non_negative(self):
         """Profile values should never be negative."""
         rt = ReceivingTube(vector=(0.0, 1.0, 0.0), od=2.0)
-        z = _compute_z_profile([rt], [90.0], [45.0], r1=0.5)
+        z, _ = _compute_z_profile([rt], [90.0], [45.0], r1=0.5)
         assert all(v >= 0.0 for v in z)
 
     def test_rotation_offset_shifts_peak(self):
         """Azimuth offset should shift the peak position."""
         rt = ReceivingTube(vector=(0.0, 1.0, 0.0), od=2.0)
-        z0 = _compute_z_profile([rt], [90.0], [0.0], r1=0.5)
-        z90 = _compute_z_profile([rt], [90.0], [90.0], r1=0.5)
+        z0, _ = _compute_z_profile([rt], [90.0], [0.0], r1=0.5)
+        z90, _ = _compute_z_profile([rt], [90.0], [90.0], r1=0.5)
         apex0 = z0.index(max(z0))
         apex90 = z90.index(max(z90))
         # Apex should shift by ~90 degrees
@@ -848,7 +882,7 @@ class TestComputeZProfile:
     def test_nearly_parallel_skipped(self):
         """Very small inclination angle (near-parallel) → sin ≈ 0, skipped by _compute_z_profile guard."""
         rt = ReceivingTube(vector=(0.0, 1.0, 0.0), od=2.0)
-        z = _compute_z_profile([rt], [0.001], [0.0], r1=0.5)
+        z, _ = _compute_z_profile([rt], [0.001], [0.0], r1=0.5)
         # sin(0.001°) ≈ 1.7e-5 which is above 1e-10 threshold,
         # but calculate_cope() now filters these out before they reach
         # _compute_z_profile.  This test confirms the low-level guard still
@@ -868,7 +902,7 @@ class TestExactFormulaAccuracy:
         # Exact z(0) = [sqrt(1 - 0) - 0.001·0·1] / 1 = 1.0
         # Simplified z(0) = R2/sin(90°) = 1.0
         rt = ReceivingTube(vector=(0.0, 1.0, 0.0), od=2.0)
-        z = _compute_z_profile([rt], [90.0], [0.0], r1=0.001)
+        z, _ = _compute_z_profile([rt], [90.0], [0.0], r1=0.001)
         assert abs(z[0] - 1.0) < 0.01
 
     def test_exact_same_od_45deg(self):
@@ -881,7 +915,7 @@ class TestExactFormulaAccuracy:
         r = 0.875
         expected = r * math.tan(math.radians(22.5))
         rt = ReceivingTube(vector=(0.0, 1.0, 0.0), od=1.75)
-        z = _compute_z_profile([rt], [45.0], [0.0], r1=r)
+        z, _ = _compute_z_profile([rt], [45.0], [0.0], r1=r)
         assert abs(z[0] - expected) < 0.01
 
     def test_exact_same_od_60deg(self):
@@ -890,7 +924,7 @@ class TestExactFormulaAccuracy:
         r = 0.875
         expected = r * math.tan(math.radians(30.0))
         rt = ReceivingTube(vector=(0.0, 1.0, 0.0), od=1.75)
-        z = _compute_z_profile([rt], [60.0], [0.0], r1=r)
+        z, _ = _compute_z_profile([rt], [60.0], [0.0], r1=r)
         assert abs(z[0] - expected) < 0.01
 
     def test_exact_small_tube_large_receiver(self):
@@ -901,7 +935,7 @@ class TestExactFormulaAccuracy:
         #            = [2.0 - 0.05] / 0.866 ≈ 2.252
         # Close but not identical due to the R1·cos(α) term
         rt = ReceivingTube(vector=(0.0, 1.0, 0.0), od=4.0)
-        z = _compute_z_profile([rt], [60.0], [0.0], r1=0.1)
+        z, _ = _compute_z_profile([rt], [60.0], [0.0], r1=0.1)
         simplified = 2.0 / math.sin(math.radians(60.0))
         # Within 5% when R1 is small relative to R2
         assert abs(z[0] - simplified) / simplified < 0.05
@@ -911,7 +945,7 @@ class TestExactFormulaAccuracy:
         # R1=2.0 (big incoming tube), R2=0.5 (small receiver)
         # At azimuth where R1·sin(phi) > R2, discriminant < 0 → z stays 0
         rt = ReceivingTube(vector=(0.0, 1.0, 0.0), od=1.0)  # R2=0.5
-        z = _compute_z_profile([rt], [90.0], [0.0], r1=2.0)
+        z, _ = _compute_z_profile([rt], [90.0], [0.0], r1=2.0)
         # At azimuth 90°: discriminant = 0.25 - 4·1 < 0, so z[90]=0
         assert z[90] == 0.0
         # Cope should only cover a small angular range (arcsin(R2/R1) on each side)
@@ -923,7 +957,7 @@ class TestExactFormulaAccuracy:
         """R1 < R2 → cope wraps beyond ±90° (no negative discriminant)."""
         # R1=0.5, R2=2.0 → R1·sin(phi) ≤ R1 < R2 always → full 360° has valid discriminant
         rt = ReceivingTube(vector=(0.0, 1.0, 0.0), od=4.0)  # R2=2.0
-        z = _compute_z_profile([rt], [90.0], [0.0], r1=0.5)
+        z, _ = _compute_z_profile([rt], [90.0], [0.0], r1=0.5)
         # At azimuth 90°: z = [sqrt(4 - 0.25) - 0.5·0·0] / 1 = sqrt(3.75) ≈ 1.936
         # Should be non-zero at 90° and 270°
         assert z[90] > 0
@@ -945,8 +979,13 @@ class TestShallowAngleFiltering:
         rad = math.radians(inclination_deg)
         return (math.cos(rad), math.sin(rad), 0.0)
 
-    def test_shallow_receiver_filtered_from_z_profile(self):
-        """A receiver at 3° inclination should be filtered; z-profile reflects only the valid receiver."""
+    def test_shallow_receiver_excluded_from_z_profile(self):
+        """A receiver at 3° inclination is excluded from z-profile entirely.
+
+        The infinite-cylinder formula produces z ∝ 1/sin(α) which diverges
+        for shallow receivers, creating unrealistic flat plateaus when capped.
+        Excluding them yields a profile that closely matches actual body geometry.
+        """
         valid_vec = (0.0, 1.0, 0.0)   # 90° inclination — fully perpendicular
         shallow_vec = self._make_vector_at_inclination(3.0)
 
@@ -963,8 +1002,11 @@ class TestShallowAngleFiltering:
             od1=1.75,
             receiving_tubes=[ReceivingTube(vector=valid_vec, od=1.75)],
         )
-        # The shallow receiver should have been filtered, so profiles match
-        assert result_both.z_profile == result_valid_only.z_profile
+        # Shallow receiver excluded — profiles should be identical
+        for i in range(360):
+            assert result_both.z_profile[i] == pytest.approx(
+                result_valid_only.z_profile[i], abs=0.001,
+            )
 
     def test_all_shallow_raises(self):
         """All receivers below threshold → ValueError."""
@@ -993,7 +1035,7 @@ class TestShallowAngleFiltering:
         assert len(result.passes) >= 1
         # Should contain a warning about the filtered receiver
         assert any("shallow brace" in w for w in result.warnings)
-        assert any("filtered" in w.lower() for w in result.warnings)
+        assert any("threshold" in w.lower() for w in result.warnings)
 
     def test_at_threshold_boundary(self):
         """Receiver at threshold should be included (not filtered).
@@ -1010,7 +1052,7 @@ class TestShallowAngleFiltering:
         # Should succeed — not filtered
         assert len(result.passes) >= 1
         # No shallow-angle warnings
-        assert not any("filtered" in w.lower() for w in result.warnings)
+        assert not any("threshold" in w.lower() for w in result.warnings)
 
     def test_just_below_threshold(self):
         """Receiver at 4.9° (just below 5° threshold) should be filtered."""
@@ -1238,6 +1280,131 @@ class TestComputeReceiverPeakDepth:
 # ---------------------------------------------------------------------------
 # OD validation tests
 # ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# z_owner tracking and method classification fixes
+# ---------------------------------------------------------------------------
+class TestZOwnerTracking:
+    """Verify z_owner accurately tracks which receiver contributes the max z."""
+
+    def test_single_receiver_all_owned(self):
+        """Single receiver: all non-zero degrees should be owned by receiver 0."""
+        rt = ReceivingTube(vector=(0.0, 1.0, 0.0), od=1.75)
+        z, z_owner = _compute_z_profile([rt], [90.0], [0.0], r1=0.875)
+        for i in range(360):
+            if z[i] > 0:
+                assert z_owner[i] == 0
+
+    def test_two_receivers_opposite_sides(self):
+        """Two same-angle receivers on opposite sides: each should own near their azimuth."""
+        rt1 = ReceivingTube(vector=(0.0, 1.0, 0.0), od=2.0)
+        rt2 = ReceivingTube(vector=(0.0, -1.0, 0.0), od=2.0)
+        z, z_owner = _compute_z_profile([rt1, rt2], [90.0, 90.0], [0.0, 180.0], r1=0.5)
+        # Both contribute equally, but receiver 0 wins ties (strict >)
+        assert z_owner[0] == 0  # At receiver 1's azimuth
+        assert z_owner[180] == 0  # Tie: both produce same z, receiver 0 wins
+
+    def test_different_angle_receivers_dominant_owner(self):
+        """Shallow-angle receiver dominates the back-of-saddle: z_owner should reflect that."""
+        rt_steep = ReceivingTube(vector=(0.0, 1.0, 0.0), od=1.75, name="steep")
+        rt_shallow = ReceivingTube(vector=(0.0, 0.3, 0.0), od=1.75, name="shallow")
+        # rt_shallow has inclination ~17° (very shallow), producing much taller z values
+        z, z_owner = _compute_z_profile(
+            [rt_steep, rt_shallow], [90.0, 17.5], [0.0, 0.0], r1=0.875,
+        )
+        # The z-profile maximum should be owned by the shallow receiver (index 1)
+        peak_idx = max(range(360), key=lambda i: z[i])
+        assert z_owner[peak_idx] == 1
+
+
+class TestMethodCForShallowReceivers:
+    """Method C should be triggered when any receiver has a steep notcher angle,
+    even if that receiver didn't get its own pass."""
+
+    def test_shallow_receiver_triggers_method_c(self):
+        """A receiver at 20° inclination (notcher=70°) should trigger Method C."""
+        v1 = (1.0, 0.0, 0.0)
+        # Perpendicular receiver (90° inclination, notcher=0°)
+        rt1 = ReceivingTube(vector=(0.0, 1.0, 0.0), od=1.75, name="perp")
+        # Shallow receiver (20° inclination, notcher=70° > MAX_NOTCHER_ANGLE=65°)
+        shallow_rad = math.radians(20.0)
+        rt2 = ReceivingTube(
+            vector=(math.cos(shallow_rad), math.sin(shallow_rad), 0.0),
+            od=1.75, name="shallow",
+        )
+        result = calculate_cope(v1=v1, od1=1.75, receiving_tubes=[rt1, rt2])
+        assert result.method == "C"
+
+    def test_borderline_angle_not_method_c(self):
+        """A receiver at 30° inclination (notcher=60°) should NOT trigger Method C."""
+        v1 = (1.0, 0.0, 0.0)
+        rt1 = ReceivingTube(vector=(0.0, 1.0, 0.0), od=1.75, name="perp")
+        angle_rad = math.radians(30.0)
+        rt2 = ReceivingTube(
+            vector=(math.cos(angle_rad), math.sin(angle_rad), 0.0),
+            od=1.75, name="angled",
+        )
+        result = calculate_cope(v1=v1, od1=1.75, receiving_tubes=[rt1, rt2])
+        assert result.method != "C"
+
+
+class TestShallowReceiverExclusion:
+    """Shallow receivers (below MIN_COPE_INCLINATION_DEG) are excluded from
+    the z-profile entirely. The infinite-cylinder formula diverges for nearly
+    parallel tubes (z ∝ 1/sin(α)), and even capping produces flat plateaus
+    that don't match actual body geometry."""
+
+    def test_shallow_receiver_excluded_from_profile(self):
+        """Adding a shallow receiver should not change the z-profile at all."""
+        v1 = (1.0, 0.0, 0.0)
+        rt_main = ReceivingTube(vector=(0.0, 1.0, 0.0), od=1.75, name="main")
+        shallow_rad = math.radians(5.0)
+        rt_shallow = ReceivingTube(
+            vector=(math.cos(shallow_rad), 0.0, math.sin(shallow_rad)),
+            od=1.75, name="y-tube",
+        )
+        result = calculate_cope(v1=v1, od1=1.75, receiving_tubes=[rt_main, rt_shallow])
+        result_main_only = calculate_cope(
+            v1=v1, od1=1.75, receiving_tubes=[rt_main],
+        )
+
+        # Profiles should be identical — shallow receiver is excluded
+        for i in range(360):
+            assert result.z_profile[i] == pytest.approx(
+                result_main_only.z_profile[i], abs=0.001,
+            )
+
+        # Should still have exactly one pass (shallow doesn't get its own)
+        assert len(result.passes) == 1
+
+    def test_shallow_receiver_no_pass_generated(self):
+        """Below-threshold receivers are excluded from passes."""
+        v1 = (1.0, 0.0, 0.0)
+        rt_main = ReceivingTube(vector=(0.0, 1.0, 0.0), od=1.75, name="main")
+        shallow_rad = math.radians(5.0)
+        rt_shallow = ReceivingTube(
+            vector=(math.cos(shallow_rad), math.sin(shallow_rad), 0.0),
+            od=1.75, name="shallow-tube",
+        )
+        result = calculate_cope(v1=v1, od1=1.75, receiving_tubes=[rt_main, rt_shallow])
+
+        pass_names = [p.receiver_name for p in result.passes]
+        assert "main" in pass_names
+        assert "shallow-tube" not in pass_names
+
+    def test_shallow_receiver_warning_generated(self):
+        """A below-threshold receiver produces a warning about checking fit."""
+        v1 = (1.0, 0.0, 0.0)
+        rt_main = ReceivingTube(vector=(0.0, 1.0, 0.0), od=1.75)
+        shallow_rad = math.radians(3.0)
+        rt_shallow = ReceivingTube(
+            vector=(math.cos(shallow_rad), math.sin(shallow_rad), 0.0),
+            od=1.75, name="brace",
+        )
+        result = calculate_cope(v1=v1, od1=1.75, receiving_tubes=[rt_main, rt_shallow])
+
+        assert any("brace" in w and "threshold" in w.lower() for w in result.warnings)
+
+
 class TestInvalidOD:
     """Validate that non-positive OD values raise ValueError."""
 

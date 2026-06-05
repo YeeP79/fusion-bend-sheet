@@ -1,0 +1,141 @@
+======================================================================
+JUNCTION ANALYSIS — Cope Math Verification
+======================================================================
+
+INCOMING TUBE: passenger shock hoop to a pillar support 1.75
+  OD: 1.7500" (4.4450 cm)
+  Faces: 9
+
+  All OD Cylinder Faces (before filtering):
+    Face 0: area=0.96cm2, axis=(-1.0000, 0.0000, 0.0000), origin=(69.86, 109.65, 67.96)
+      non-circle edges: 4 (COPED)
+    Face 6: area=13.99cm2, axis=(0.5061, 0.2937, 0.8109), origin=(29.18, 86.04, 2.77)
+      non-circle edges: 7 (COPED)
+    Face 7: area=1054.91cm2, axis=(0.4463, 0.0085, 0.8948), origin=(33.78, 108.96, -4.39)
+      circle 0: (33.78, 108.96, -4.39)
+      non-circle edges: 6 (COPED)
+
+  Coaxial filtering:
+    Face 0: FILTERED (non-coaxial cope artifact)
+    Face 6: FILTERED (non-coaxial cope artifact)
+  Dominant axis: (0.4463, 0.0085, 0.8948)
+  Coaxial faces kept: 1
+  Torus (bend) faces: 2
+
+  Endpoint A (start): (32.976, 108.945, -5.994) cm
+  Endpoint B (end):   (69.913, 109.648, 68.061) cm
+  Direction A→B:      (0.4463, 0.0085, 0.8948)
+  Tube length:        32.582"
+
+  Visible bodies in assembly: 121
+
+======================================================================
+RECEIVERS AT ENDPOINT A (start)
+  Cope point: (32.976, 108.945, -5.994) cm
+  Tube direction (outward): (-0.4463, -0.0085, -0.8948)
+======================================================================
+
+  --- passenger a pillar to front main (2) (1) ---
+  OD: 1.7500" (4.4450 cm)
+  Faces: 8, OD cylinders: 4
+  Match threshold: 3.3338 cm (1.3125")
+  SELECTED face: 7 (dist=1.7681cm)
+  SELECTED inclination: 80.2deg, notcher: 9.8deg
+  IS RECEIVER: YES
+  All OD cylinder faces:
+    Face 7: dist=1.7681cm, incl=80.2deg, area=2.06cm2, axis=(0.1881, 0.9374, -0.2930), origin=(29.18, 86.04, 2.77) <<< SELECTED
+    Face 5: dist=23.2156cm, incl=26.5deg, area=2.28cm2, axis=(-0.0000, -0.0000, -1.0000), origin=(29.18, 86.04, -70.70)
+    Face 3: dist=24.7686cm, incl=17.4deg, area=1047.94cm2, axis=(0.5061, 0.2937, 0.8109), origin=(29.18, 86.04, 2.77)
+    Face 1: dist=73.9537cm, incl=63.5deg, area=2.08cm2, axis=(-1.0000, 0.0000, 0.0000), origin=(69.86, 109.65, 67.96)
+
+  --- passenger shock tower 1.75 ---
+  OD: 1.7500" (4.4450 cm)
+  Faces: 8, OD cylinders: 2
+  Match threshold: 3.3338 cm (1.3125")
+  SELECTED face: 5 (dist=1.7681cm)
+  SELECTED inclination: 80.2deg, notcher: 9.8deg
+  IS RECEIVER: YES
+  All OD cylinder faces:
+    Face 5: dist=1.7681cm, incl=80.2deg, area=460.51cm2, axis=(0.1881, 0.9374, -0.2930), origin=(29.18, 86.04, 2.77) <<< SELECTED
+    Face 3: dist=28.6420cm, incl=78.2deg, area=410.07cm2, axis=(-0.1953, -0.9731, -0.1222), origin=(34.91, 114.62, -34.11)
+
+  --- Y tube passenger 1.75 ---
+  OD: 1.7500" (4.4450 cm)
+  Faces: 8, OD cylinders: 2
+  Match threshold: 3.3338 cm (1.3125")
+  SELECTED face: 5 (dist=0.1636cm)
+  SELECTED inclination: 5.2deg, notcher: 84.8deg
+  IS RECEIVER: YES
+  All OD cylinder faces:
+    Face 5: dist=0.1636cm, incl=5.2deg, area=136.92cm2, axis=(-0.5261, -0.0081, -0.8504), origin=(33.78, 108.96, -4.39) <<< SELECTED
+    Face 3: dist=15.7628cm, incl=61.1deg, area=116.27cm2, axis=(0.5673, -0.0078, -0.8235), origin=(29.00, 108.74, -28.00)
+
+======================================================================
+RECEIVERS AT ENDPOINT B (end)
+  Cope point: (69.913, 109.648, 68.061) cm
+  Tube direction (outward): (0.4463, 0.0085, 0.8948)
+======================================================================
+
+  --- Body6 ---
+  OD: 1.7500" (4.4450 cm)
+  Faces: 23, OD cylinders: 7
+  Match threshold: 3.3338 cm (1.3125")
+  SELECTED face: 4 (dist=1.0144cm)
+  SELECTED inclination: 51.1deg, notcher: 38.9deg
+  IS RECEIVER: YES
+  All OD cylinder faces:
+    Face 4: dist=1.0144cm, incl=51.1deg, area=72.19cm2, axis=(-0.0105, -0.7242, -0.6896), origin=(70.46, 143.85, 99.23) <<< SELECTED
+    Face 5: dist=1.0147cm, incl=51.1deg, area=503.88cm2, axis=(-0.0113, -0.7241, -0.6896), origin=(70.41, 140.11, 95.66)
+    Face 20: dist=1.0397cm, incl=83.0deg, area=848.20cm2, axis=(-0.1840, -0.9823, -0.0343), origin=(68.94, 104.70, 66.85)
+    Face 2: dist=33.5179cm, incl=28.6deg, area=881.15cm2, axis=(0.0249, -0.1184, -0.9927), origin=(68.82, 155.56, 170.34)
+    Face 1: dist=33.5191cm, incl=28.6deg, area=53.76cm2, axis=(0.0249, -0.1184, -0.9927), origin=(68.72, 156.02, 174.16)
+    Face 15: dist=41.4707cm, incl=37.7deg, area=371.46cm2, axis=(0.1896, -0.0907, -0.9777), origin=(63.18, 158.79, 203.74)
+    Face 22: dist=66.1511cm, incl=49.5deg, area=6.72cm2, axis=(-0.9703, 0.0000, -0.2419), origin=(62.51, 43.50, 65.95)
+
+  --- Body3 ---
+  OD: 1.7500" (4.4450 cm)
+  Faces: 5, OD cylinders: 3
+  Match threshold: 3.3338 cm (1.3125")
+  SELECTED face: 4 (dist=1.0147cm)
+  SELECTED inclination: 51.1deg, notcher: 38.9deg
+  IS RECEIVER: YES
+  All OD cylinder faces:
+    Face 4: dist=1.0147cm, incl=51.1deg, area=10.66cm2, axis=(-0.0113, -0.7241, -0.6896), origin=(70.41, 140.11, 95.66) <<< SELECTED
+    Face 2: dist=11.2762cm, incl=25.4deg, area=287.22cm2, axis=(-0.0387, -0.1425, -0.9890), origin=(71.09, 126.15, 103.55)
+    Face 0: dist=19.2426cm, incl=58.7deg, area=9.15cm2, axis=(0.0238, -0.8109, -0.5847), origin=(70.40, 149.63, 120.48)
+
+  --- lower windshield cross tube ---
+  OD: 1.7500" (4.4450 cm)
+  Faces: 6, OD cylinders: 1
+  Match threshold: 3.3338 cm (1.3125")
+  SELECTED face: 1 (dist=0.1039cm)
+  SELECTED inclination: 63.5deg, notcher: 26.5deg
+  IS RECEIVER: YES
+  All OD cylinder faces:
+    Face 1: dist=0.1039cm, incl=63.5deg, area=1905.99cm2, axis=(-1.0000, 0.0000, 0.0000), origin=(69.86, 109.65, 67.96) <<< SELECTED
+
+  --- driver side a pillar to front main ---
+  OD: 1.7500" (4.4450 cm)
+  Faces: 8, OD cylinders: 4
+  Match threshold: 3.3338 cm (1.3125")
+  SELECTED face: 0 (dist=0.1039cm)
+  SELECTED inclination: 63.5deg, notcher: 26.5deg
+  IS RECEIVER: YES
+  All OD cylinder faces:
+    Face 0: dist=0.1039cm, incl=63.5deg, area=2.08cm2, axis=(-1.0000, 0.0000, 0.0000), origin=(69.86, 109.65, 67.96) <<< SELECTED
+    Face 5: dist=101.8641cm, incl=26.5deg, area=5.65cm2, axis=(-0.0000, 0.0000, 1.0000), origin=(-29.18, 86.04, -70.70)
+    Face 4: dist=112.6173cm, incl=81.8deg, area=0.21cm2, axis=(-0.8216, 0.0000, 0.5700), origin=(29.18, 86.04, -37.70)
+    Face 7: dist=120.5946cm, incl=59.9deg, area=1055.07cm2, axis=(-0.5062, 0.2937, 0.8109), origin=(-29.18, 86.04, 2.78)
+
+  --- passenger a pillar to front main (2) (1) ---
+  OD: 1.7500" (4.4450 cm)
+  Faces: 8, OD cylinders: 4
+  Match threshold: 3.3338 cm (1.3125")
+  SELECTED face: 3 (dist=0.0348cm)
+  SELECTED inclination: 17.4deg, notcher: 72.6deg
+  IS RECEIVER: YES
+  All OD cylinder faces:
+    Face 3: dist=0.0348cm, incl=17.4deg, area=1047.94cm2, axis=(0.5061, 0.2937, 0.8109), origin=(29.18, 86.04, 2.77) <<< SELECTED
+    Face 1: dist=0.1039cm, incl=63.5deg, area=2.08cm2, axis=(-1.0000, 0.0000, 0.0000), origin=(69.86, 109.65, 67.96)
+    Face 5: dist=47.0803cm, incl=26.5deg, area=2.28cm2, axis=(-0.0000, -0.0000, -1.0000), origin=(29.18, 86.04, -70.70)
+    Face 7: dist=79.7815cm, incl=80.2deg, area=2.06cm2, axis=(0.1881, 0.9374, -0.2930), origin=(29.18, 86.04, 2.77)

@@ -81,39 +81,57 @@ def calculate_cope(
 
     v1_norm = normalize(v1)
 
-    # Validate all receiving tube vectors
+    # Filter out parallel/anti-parallel receivers. These are often the
+    # incoming tube's own body occurrences detected as receivers. Instead
+    # of raising an error that kills the entire calculation, filter them
+    # with a warning so the valid receivers can still be processed.
+    parallel_warnings: list[str] = []
+    non_parallel_tubes: list[ReceivingTube] = []
     for i, rt in enumerate(receiving_tubes):
         rt_norm = normalize(rt.vector)
         dot = abs(dot_product(v1_norm, rt_norm))
         if dot > 1.0 - 1e-8:
             name = rt.name or f"tube {i + 1}"
-            raise ValueError(
-                f"Incoming tube is parallel/anti-parallel to receiving {name}. "
-                f"A saddle cope is not meaningful for parallel tubes."
+            parallel_warnings.append(
+                f"Receiver '{name}' skipped: parallel/anti-parallel to incoming tube."
             )
+        else:
+            non_parallel_tubes.append(rt)
 
-    # Compute inclination angle and azimuth for each receiver
+    if not non_parallel_tubes:
+        raise ValueError(
+            "All receiving tubes are parallel/anti-parallel to the incoming tube. "
+            "A saddle cope is not meaningful for parallel tubes."
+        )
+
+    # Compute inclination angle and azimuth for each non-parallel receiver
     inclination_angles: list[float] = []
     azimuths: list[float] = []
-    for rt in receiving_tubes:
+    for rt in non_parallel_tubes:
         inclination_angles.append(_compute_inclination_angle(v1_norm, normalize(rt.vector)))
         azimuths.append(
             _compute_rotation_mark(v1_norm, normalize(rt.vector), reference_vector)
         )
 
-    # Filter out shallow-angle receivers whose inclination is below the
-    # minimum threshold.  At very small angles sin(α) → 0 and the saddle
-    # formula produces impractically tall z-profiles (z ∝ 1/sin(α)).
-    # These are almost always false-positive detections (parallel braces,
-    # duplicate occurrences of the same body, etc.).
+    # Replace receiving_tubes with filtered list for all downstream processing
+    receiving_tubes = non_parallel_tubes
+
+    # Separate receivers into above-threshold (get passes) and
+    # below-threshold (excluded from z-profile and passes).
+    # At very small angles sin(α) → 0 and the saddle formula produces
+    # impractically tall z-profiles (z ∝ 1/sin(α)). The infinite-cylinder
+    # formula cannot accurately model shallow receivers because their
+    # physical tube length limits the real intersection extent. Excluding
+    # them yields a profile that closely matches actual body geometry.
     shallow_warnings: list[str] = []
     valid_indices: list[int] = []
     for i, angle in enumerate(inclination_angles):
         if angle < MIN_COPE_INCLINATION_DEG:
             name = receiving_tubes[i].name or f"tube {i + 1}"
             shallow_warnings.append(
-                f"Receiver '{name}' filtered: inclination {angle:.1f}° is below "
-                f"{MIN_COPE_INCLINATION_DEG}° minimum (near-parallel, likely false positive)."
+                f"Receiver '{name}': inclination {angle:.1f}° is below "
+                f"{MIN_COPE_INCLINATION_DEG}° threshold — excluded from "
+                f"profile. Check fit against this tube after cutting."
             )
         else:
             valid_indices.append(i)
@@ -125,20 +143,20 @@ def calculate_cope(
             f"Check that the correct receiving tubes were detected."
         )
 
-    # Build filtered lists for downstream computation
+    # Build filtered lists for downstream computation (passes, method)
     filtered_tubes = [receiving_tubes[i] for i in valid_indices]
     filtered_inclinations = [inclination_angles[i] for i in valid_indices]
     filtered_azimuths = [azimuths[i] for i in valid_indices]
 
-    # Compute combined z-profile
-    z_profile = _compute_z_profile(filtered_tubes, filtered_inclinations, filtered_azimuths, od1 / 2.0)
+    # Compute combined z-profile from above-threshold receivers
+    z_profile, z_owner = _compute_z_profile(filtered_tubes, filtered_inclinations, filtered_azimuths, od1 / 2.0)
 
     # Detect lobes and build passes
     lobes = _detect_lobes(z_profile, od1)
-    passes = _build_passes(lobes, filtered_inclinations, filtered_azimuths, filtered_tubes, od1, unit_label)
+    passes = _build_passes(lobes, filtered_inclinations, filtered_azimuths, filtered_tubes, od1, unit_label, z_owner)
 
-    # Classify method
-    method, method_desc = _classify_method(passes, lobes)
+    # Classify method — check ALL receivers' angles, not just those with passes
+    method, method_desc = _classify_method(passes, lobes, filtered_inclinations)
 
     # Determine reference info
     has_bend_ref = reference_vector is not None
@@ -148,7 +166,7 @@ def calculate_cope(
         ref_desc = ROTATION_ZERO_STRAIGHT_DESCRIPTION
 
     # Collect warnings
-    warnings: list[str] = list(shallow_warnings)
+    warnings: list[str] = list(parallel_warnings) + list(shallow_warnings)
     for p in passes:
         if p.holesaw_warning:
             warnings.append(p.holesaw_warning)
@@ -269,7 +287,7 @@ def _compute_z_profile(
     inclination_angles: list[float],
     azimuths: list[float],
     r1: float,
-) -> list[float]:
+) -> tuple[list[float], list[int]]:
     """
     Compute the cope z-profile at 1-degree increments around the tube.
 
@@ -290,9 +308,13 @@ def _compute_z_profile(
         r1: Incoming tube radius (display units)
 
     Returns:
-        360 floats representing z depth at each degree
+        Tuple of (z_profile, z_owner) where z_profile is 360 floats
+        representing z depth at each degree, and z_owner is 360 ints
+        indicating which receiver index contributes the max z at each degree
+        (-1 if z is zero).
     """
     z_final: list[float] = [0.0] * 360
+    z_owner: list[int] = [-1] * 360
 
     for i, rt in enumerate(receiving_tubes):
         alpha_rad = math.radians(inclination_angles[i])
@@ -314,9 +336,11 @@ def _compute_z_profile(
                 continue  # no intersection at this azimuth
             z_val = (math.sqrt(discriminant) - r1 * cos_alpha * cos_phi) / sin_alpha
             z_val = max(0.0, z_val)
-            z_final[phi] = max(z_final[phi], z_val)
+            if z_val > z_final[phi]:
+                z_final[phi] = z_val
+                z_owner[phi] = i
 
-    return z_final
+    return z_final, z_owner
 
 
 def _detect_lobes(z_profile: list[float], od: float) -> list[_Lobe]:
@@ -419,6 +443,7 @@ def _build_passes(
     receiving_tubes: list[ReceivingTube],
     od1: float,
     unit_label: str = '"',
+    z_owner: list[int] | None = None,
 ) -> list[CopePass]:
     """
     Build CopePass entries from detected lobes.
@@ -432,6 +457,9 @@ def _build_passes(
         receiving_tubes: Receiving tube specs (for OD lookup)
         od1: Incoming tube OD
         unit_label: Unit suffix for warning messages
+        z_owner: Per-degree receiver index that contributes the max z.
+            Used for accurate lobe-to-receiver assignment. If None, falls
+            back to azimuth-proximity matching.
 
     Returns:
         List of CopePass entries
@@ -441,7 +469,7 @@ def _build_passes(
 
     front_lobes, back_lobes = _classify_lobes_front_back(lobes, azimuths)
     unique_lobes, merged_receivers = _assign_lobes_to_receivers(
-        front_lobes, back_lobes, azimuths, inclination_angles,
+        front_lobes, back_lobes, azimuths, inclination_angles, z_owner,
     )
 
     total_passes = len(unique_lobes) + len(merged_receivers)
@@ -495,20 +523,51 @@ def _assign_lobes_to_receivers(
     back_lobes: list[_Lobe],
     azimuths: list[float],
     inclination_angles: list[float],
+    z_owner: list[int] | None = None,
 ) -> tuple[list[tuple[_Lobe, int]], list[int]]:
     """
     Assign front lobes to receivers; detect merged receivers needing separate passes.
+
+    When z_owner is provided (per-degree receiver contribution tracking),
+    lobes are assigned to the receiver that contributes the maximum z at
+    the lobe's apex degree. This is much more accurate than azimuth-proximity
+    matching, which can misassign lobes in multi-receiver scenarios where
+    the back-of-saddle peak of one receiver is near another receiver's azimuth.
 
     Returns:
         unique_lobes: List of (lobe, receiver_index) tuples, sorted by apex_z descending.
         merged_receivers: Receiver indices whose saddles merged into another lobe
             but whose notcher angles differ enough to warrant separate passes.
     """
+    def _match_lobe(lobe: _Lobe) -> int:
+        """Match a lobe to its contributing receiver."""
+        if z_owner is not None:
+            owner = z_owner[lobe.apex_azimuth]
+            if owner >= 0:
+                return owner
+        return _match_lobe_to_receiver(lobe, azimuths)
+
     # Assign front lobes to receivers (one per receiver, highest apex first).
     seen_receivers: set[int] = set()
     unique_lobes: list[tuple[_Lobe, int]] = []
     for lobe in front_lobes:
-        receiver_idx = _match_lobe_to_receiver(lobe, azimuths)
+        receiver_idx = _match_lobe(lobe)
+        if receiver_idx in seen_receivers:
+            # z_owner matched to an already-claimed receiver (e.g., symmetric
+            # case where two receivers produce identical z-profiles and ties
+            # always break to the same one). Fall back to the closest
+            # unclaimed receiver by azimuth proximity.
+            best_idx = -1
+            best_dist = 360.0
+            for j, az in enumerate(azimuths):
+                if j in seen_receivers:
+                    continue
+                d = _azimuth_dist(lobe.apex_azimuth, az)
+                if d < best_dist:
+                    best_dist = d
+                    best_idx = j
+            if best_idx >= 0:
+                receiver_idx = best_idx
         if receiver_idx not in seen_receivers:
             seen_receivers.add(receiver_idx)
             unique_lobes.append((lobe, receiver_idx))
@@ -531,14 +590,14 @@ def _assign_lobes_to_receivers(
                         key=lambda lb: _azimuth_dist(lb.apex_azimuth, azimuths[recv_idx]),
                     )
                 )
-                owner_idx = _match_lobe_to_receiver(nearest_lobe, azimuths)
+                owner_idx = _match_lobe(nearest_lobe)
                 owner_notcher = 90.0 - inclination_angles[owner_idx]
                 recv_notcher = 90.0 - inclination_angles[recv_idx]
                 if abs(owner_notcher - recv_notcher) > LOBE_COLLAPSE_DEGREES:
                     merged_receivers.append(recv_idx)
             else:
                 for lobe in back_lobes:
-                    bl_recv = _match_lobe_to_receiver(lobe, azimuths)
+                    bl_recv = _match_lobe(lobe)
                     if bl_recv == recv_idx:
                         unique_lobes.append((lobe, recv_idx))
                         seen_receivers.add(recv_idx)
@@ -703,6 +762,7 @@ def _compute_holesaw_depth(
 def _classify_method(
     passes: list[CopePass],
     lobes: list[_Lobe],
+    inclination_angles: list[float] | None = None,
 ) -> tuple[Literal["A", "B", "C"], str]:
     """
     Classify the recommended fabrication method.
@@ -711,15 +771,31 @@ def _classify_method(
     Method B: Multi-pass controlled plunge (notcher)
     Method C: Wrap template + grinder
 
+    Args:
+        passes: Generated CopePass entries.
+        lobes: Detected lobes from z-profile.
+        inclination_angles: Inclination angle for ALL receivers (not just
+            those with passes). Used to catch shallow-angle receivers whose
+            notcher setting exceeds MAX_NOTCHER_ANGLE even if they didn't
+            get their own pass.
+
     Returns:
         Tuple of (method letter, human description)
     """
-    # Check for Method C triggers
+    # Check for Method C triggers from passes
     for p in passes:
         if p.notcher_angle > MAX_NOTCHER_ANGLE:
             return ("C", "Wrap template + grinder — angle too acute for reliable notcher work")
         if p.holesaw_depth_required > MAX_HOLESAW_DEPTH:
             return ("C", "Wrap template + grinder — holesaw depth exceeds notcher capacity")
+
+    # Check ALL receivers' inclination angles — a receiver that didn't get
+    # its own pass can still make the overall junction too complex for a notcher.
+    if inclination_angles:
+        for incl in inclination_angles:
+            notcher = 90.0 - incl
+            if notcher > MAX_NOTCHER_ANGLE:
+                return ("C", "Wrap template + grinder — receiver angle too acute for notcher")
 
     if len(lobes) >= 3:
         return ("C", "Wrap template + grinder — three or more lobes detected")

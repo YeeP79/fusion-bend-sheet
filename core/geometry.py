@@ -286,6 +286,43 @@ def unsigned_angle_between(v1: Vector3D, v2: Vector3D) -> float:
     return math.degrees(math.acos(abs(cos_angle)))
 
 
+def bbox_axial_extent(
+    bbox_min: Point3D,
+    bbox_max: Point3D,
+    axis_origin: Point3D,
+    axis_dir: Vector3D,
+) -> tuple[float, float]:
+    """Project all 8 bounding box corners onto an axis and return the extent.
+
+    This correctly handles non-axis-aligned tubes by testing all 8 corner
+    combinations.  Using only (minPoint, maxPoint) — i.e. 2 of 8 corners —
+    gives wrong results when the axis direction has mixed-sign components.
+
+    Args:
+        bbox_min: Bounding box minimum corner (x, y, z).
+        bbox_max: Bounding box maximum corner (x, y, z).
+        axis_origin: A point on the projection axis.
+        axis_dir: Direction of the projection axis (need not be normalized).
+
+    Returns:
+        (min_projection, max_projection) along the axis.
+    """
+    t_min = float("inf")
+    t_max = float("-inf")
+
+    for x in (bbox_min[0], bbox_max[0]):
+        for y in (bbox_min[1], bbox_max[1]):
+            for z in (bbox_min[2], bbox_max[2]):
+                dx = x - axis_origin[0]
+                dy = y - axis_origin[1]
+                dz = z - axis_origin[2]
+                t = dx * axis_dir[0] + dy * axis_dir[1] + dz * axis_dir[2]
+                t_min = min(t_min, t)
+                t_max = max(t_max, t)
+
+    return t_min, t_max
+
+
 def vectors_are_collinear(
     v1: Vector3D,
     v2: Vector3D,

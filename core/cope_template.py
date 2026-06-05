@@ -39,6 +39,7 @@ def generate_cope_svg(
     ref_mark_length: float = 0.5,
     location: str = "",
     waste_side: Literal["top", "bottom"] = "top",
+    sampled_profile: list[float] | None = None,
 ) -> str:
     """
     Generate a 1:1 scale SVG wrap template for a cope cut.
@@ -66,17 +67,43 @@ def generate_cope_svg(
     # For straight tubes, rotate profile 180° so REF is at template center
     if has_bends or not result.z_profile:
         display_profile: list[float] = list(result.z_profile) if result.z_profile else []
-        deg_offset = 0
+        display_sampled: list[float] | None = (
+            list(sampled_profile) if sampled_profile else None
+        )
     else:
         half = len(result.z_profile) // 2
         display_profile = result.z_profile[half:] + result.z_profile[:half]
-        deg_offset = half
+        display_sampled = (
+            sampled_profile[half:] + sampled_profile[:half]
+            if sampled_profile else None
+        )
+
+    # Reflect profiles for outside-surface template wrapping convention.
+    # The formula computes angles CW from the cope end, but a printed
+    # template wrapped around a tube (printed side out) has left-to-right
+    # going CCW from the cope end.  Reflecting corrects for this so the
+    # physical cope matches the Fusion model.
+    display_profile = _reflect_profile(display_profile)
+    if display_sampled:
+        display_sampled = _reflect_profile(display_sampled)
 
     flip = waste_side == "bottom"
 
-    # Layout dimensions
+    # Determine primary profile early so layout dimensions account for its depth
+    stroke_width = _PROFILE_STROKE_HEAVY if result.method == "C" else _PROFILE_STROKE
+
+    if display_sampled:
+        primary_profile = _fill_profile_gaps(display_sampled)
+    else:
+        primary_profile = display_profile
+
+    primary_max_z = max(primary_profile) if primary_profile else 0.0
+    if primary_max_z > max_z:
+        max_z = primary_max_z
+
+    # Layout dimensions (using final max_z from whichever profile is deeper)
     template_w = circumference
-    profile_h = max(max_z, 0.5)  # Height for profile rendering
+    profile_h = max(max_z, 0.5)
     template_h = profile_h + _CUTTING_MARGIN
 
     # Info block height
@@ -105,23 +132,23 @@ def generate_cope_svg(
         # Default: profile at top, cutting margin below
         profile_y = ty
 
-    # Registration marks: dashed lines span the full template height
-    # (profile area + cutting margin) so they extend into the header
-    # where the labels are placed.
-    _add_registration_marks(svg, tx, ty, template_w, template_h, display_profile,
+    # Registration marks use primary profile for APEX position
+    _add_registration_marks(svg, tx, ty, template_w, template_h, primary_profile,
                             ref_at_center=not has_bends, flip=flip)
 
-    # Draw profile
-    stroke_width = _PROFILE_STROKE_HEAVY if result.method == "C" else _PROFILE_STROKE
-    if result.is_multi_pass:
-        _add_multi_pass_profile(svg, tx, profile_y, template_w, profile_h, result,
-                                display_profile, deg_offset)
-    _add_profile_curve(svg, tx, profile_y, template_w, profile_h, display_profile,
-                       stroke_width)
+    # Draw profile curve(s)
+    if display_sampled:
+        # Draw formula as light gray reference behind the primary curve
+        _add_profile_curve(svg, tx, profile_y, template_w, profile_h,
+                           display_profile, 0.01, color="#BBBBBB")
+
+    # Draw the primary profile as the solid black cutting guide
+    _add_profile_curve(svg, tx, profile_y, template_w, profile_h,
+                       primary_profile, stroke_width)
 
     # Edge labels on the template itself
     _add_edge_labels(svg, tx, ty, template_w, template_h, profile_y, profile_h,
-                     display_profile, flip=flip)
+                     primary_profile, flip=flip)
 
     # Alignment line (separates profile area from cutting margin)
     if flip:
@@ -242,6 +269,7 @@ def _add_registration_marks(
 def _add_profile_curve(
     svg: ET.Element, x: float, y: float, w: float, h: float,
     z_profile: list[float], stroke_width: float,
+    color: str = "#000000",
 ) -> None:
     """Draw the cope profile curve as an SVG path.
 
@@ -264,9 +292,77 @@ def _add_profile_curve(
     path = ET.SubElement(svg, "path")
     path.set("d", " ".join(points))
     path.set("fill", "none")
-    path.set("stroke", "#000000")
+    path.set("stroke", color)
     path.set("stroke-width", f"{stroke_width}")
     path.set("stroke-linejoin", "round")
+
+
+def _reflect_profile(profile: list[float]) -> list[float]:
+    """Reflect a 360-degree profile for outside-surface template wrapping.
+
+    Maps index d to index (N-d)%N, converting a CW-indexed profile into
+    the CCW left-to-right layout used by printed wrap templates.  Index 0
+    (REF) and index N/2 (180°) are invariant.
+    """
+    n = len(profile)
+    if n == 0:
+        return profile
+    return [profile[(n - i) % n] for i in range(n)]
+
+
+def _fill_profile_gaps(profile: list[float]) -> list[float]:
+    """Fill zero-valued gaps in a sampled profile via linear interpolation.
+
+    The sampled body edge profile has 360 entries (one per degree) but may
+    have gaps (z < 0.001) where no edge data was captured.  This function
+    interpolates linearly between the nearest known points on each side,
+    handling circular wrap-around at 0°/360°.
+
+    If the profile is entirely zero or has no gaps, returns it unchanged.
+    """
+    n = len(profile)
+    if n == 0:
+        return profile
+
+    _THRESHOLD = 0.001
+    has_data = [z > _THRESHOLD for z in profile]
+
+    # Nothing to interpolate if all data or no data
+    if all(has_data) or not any(has_data):
+        return list(profile)
+
+    filled = list(profile)
+
+    # Start iteration from the first data point so gaps never straddle
+    # the iteration boundary — this handles circular wrap-around correctly.
+    first_data = next(i for i in range(n) if has_data[i])
+
+    i = 0
+    while i < n:
+        idx = (first_data + i) % n
+        if not has_data[idx]:
+            gap_start = i
+            while i < n and not has_data[(first_data + i) % n]:
+                i += 1
+
+            # Left boundary is always valid (we started from a data point)
+            left_idx = (first_data + gap_start - 1) % n
+            left_val = filled[left_idx]
+
+            # Right boundary: if i == n, it wraps back to first_data
+            right_idx = (first_data + i) % n if i < n else first_data
+            right_val = filled[right_idx]
+
+            gap_len = i - gap_start
+            for j in range(gap_len):
+                t = (j + 1) / (gap_len + 1)
+                filled[(first_data + gap_start + j) % n] = (
+                    left_val + t * (right_val - left_val)
+                )
+        else:
+            i += 1
+
+    return filled
 
 
 def _add_multi_pass_profile(
